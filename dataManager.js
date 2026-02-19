@@ -1,3 +1,5 @@
+import {SampleTracks} from "./sampleDataGenerator.js";
+
 class DataManager {
     constructor() {
         this.db = null;
@@ -38,10 +40,12 @@ class DataManager {
 
         //Sample data for testing
         if (!playlistData){
-            playlistData = {
-                name: "New Playlist",
-                tracks: []
-            };
+            const sampleTracks = new SampleTracks();
+            playlistData = sampleTracks.createRandomPlaylist();
+            // playlistData = {
+            //     name: "New Playlist",
+            //     tracks: []
+            // };
         }
         console.log("Creating playlist with data: ", playlistData);
 
@@ -117,8 +121,8 @@ class DataManager {
                 // console.log("Playlists retrieved successfully: ", event.target.result);
                 let playlists = event.target.result;
                 if (playlists.length>0){
-                console.log("Playlists retrieved successfully: ");
-                console.table(event.target.result);
+                    console.log("Playlists retrieved successfully: ");
+                    console.table(event.target.result);
                 }
                 else {
                     console.log("No playlists to retrieve from IndexedDB!");
