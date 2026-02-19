@@ -28,7 +28,7 @@ class GenericDataManager {
 
     // Create a new object store if it doesn't exist
     async createObjectStore(database, storeName, options = { keyPath: "id", autoIncrement: true }) {
-        if (database) {
+        if (!database) {
             throw new Error("Database not initialized");
         }
         if (database.objectStoreNames.contains(storeName)) {
@@ -40,26 +40,65 @@ class GenericDataManager {
         }
     }
 
-    //General create operation
-    async genericCreate(storeName, data) {
+    //Generic create operation
+    async createRecord(storeName, data) {
+        //Ensure database exists
         if (!this.db) {
             throw new Error("Database not initialized");
         }
 
+        //Create transaction, access store, create request to add data
         const transaction = this.db.transaction([storeName], "readwrite");
         const objectStore = transaction.objectStore(storeName);
         const request = objectStore.add(data);
 
         return new Promise((resolve, reject) => {
-            transaction.oncomplete = () => {resolve(request.result);};
-            transaction.onerror = (event) => {reject(event.target.error);};
-            request.onsuccess = (event) => {console.log(`Data added to ${storeName} successfully`);};
-            request.onerror = (event) => {console.error(`Error adding data to ${storeName}:`, event.target.error);};
+            let result;
+            request.onsuccess = () => {
+                result = request.result;
+            };
+            transaction.oncomplete = () => {
+                resolve(result);
+            };
+            transaction.onerror = (event) => {
+                reject(event.target.error);
+            };
+            transaction.onabort = (event) => {
+                reject(event.target.error);
+            }
         });
     }
 
-    //General read operation
-    async genericGetAll(storeName) {
+
+    //Generic read operation
+    async getRecord(storeName, key) {
+        if (!this.db) {
+            throw new Error("Database not initialized");
+        }
+
+        const transaction = this.db.transaction([storeName], "readonly");
+        const objectStore = transaction.objectStore(storeName);
+        const request = objectStore.get(key);
+
+        return new Promise((resolve, reject) => {
+            let result;
+            request.onsuccess = () => {
+                result = request.result;
+            };
+            transaction.oncomplete = () => {
+                resolve(result);
+            };
+            transaction.onerror = (event) => {
+                reject(event.target.error);
+            };
+            transaction.onabort = (event) => {
+                reject(event.target.error);
+            }
+        });
+    }   
+
+    //Generic get all operation
+    async getAllRecords(storeName) {
         if (!this.db) {
             throw new Error("Database not initialized");
         }
@@ -69,82 +108,114 @@ class GenericDataManager {
         const request = objectStore.getAll();
 
         return new Promise((resolve, reject) => {
-            request.onsuccess = (event) => {
-                console.log(`Data retrieved from ${storeName} successfully`);
-                console.table(event.target.result);
-                resolve(event.target.result);
+            let result;
+            request.onsuccess = () => {
+                result = request.result;
             };
-            request.onerror = (event) => {
-                console.error(`Error retrieving data from ${storeName}:`, event.target.error);
+            transaction.oncomplete = () => {
+                resolve(result);
+            };
+            transaction.onerror = (event) => {
                 reject(event.target.error);
             };
-        });
-
-        return new Promise((resolve, reject) => {
-            transaction.oncomplete = () => {resolve();};
-            transaction.onerror = (event) => {reject(event.target.error);};
-            request.onsuccess = (event) => {console.log(`Data deleted from ${storeName} successfully`);};
-            request.onerror = (event) => {console.error(`Error deleting data from ${storeName}:`, event.target.error);};           
+            transaction.onabort = (event) => {
+                reject(event.target.error);
+            }
         });
     }
 
-    //General update operation
-    async genericUpdate(storeName, key, updatedData) {
+
+    //Using this in place of a merge update method, until its clearer  what functionality is actually needed.
+    async replaceRecord(storeName, key, newData) {
+
+        //Ensure database exists
         if (!this.db) {
             throw new Error("Database not initialized");
         }
 
+        //Create transaction, access store, create request to replace data
         const transaction = this.db.transaction([storeName], "readwrite");
         const objectStore = transaction.objectStore(storeName);
-        const getRequest = objectStore.get(key);
+        const request = objectStore.put({...newData, id: key});//ensure this object is valid?
 
         return new Promise((resolve, reject) => {
-            getRequest.onsuccess = (event) => {
-                const data = event.target.result;
-                if (!data) {
-                    reject(new Error(`No record found with key ${key} in ${storeName}`));
-                    return;
-                }
-                // Update the data with the new values
-                Object.assign(data, updatedData);
-                const updateRequest = objectStore.put(data);
-
-                updateRequest.onsuccess = () => {
-                    console.log(`Data updated in ${storeName} successfully`);
-                    resolve();
-                };
-                updateRequest.onerror = (event) => {
-                    console.error(`Error updating data in ${storeName}:`, event.target.error);
-                    reject(event.target.error);
-                };
+            let result;
+            request.onsuccess = () => {
+                result = request.result;
+                console.log(`result: ${result}`);
+                console.log(`request.result: ${request.result}`);
             };
-            getRequest.onerror = (event) => {
-                console.error(`Error retrieving data for update from ${storeName}:`, event.target.error);
+            transaction.oncomplete = () => {
+                resolve(result);
+            };
+            transaction.onerror = (event) => {
                 reject(event.target.error);
             };
-        }); 
+            transaction.onabort = (event) => {
+                reject(event.target.error);
+            }
+        });
     }
 
     //Generic delete operation
-    async genericDelete(storeName, key) {
+    async deleteRecord(storeName, key) {
+
+        //Ensure database exists
         if (!this.db) {
             throw new Error("Database not initialized");
         }
-        
+
+        //Create transaction, access store, create request to delete data
         const transaction = this.db.transaction([storeName], "readwrite");
         const objectStore = transaction.objectStore(storeName);
-        const request = objectStore.delete(key);
+        const request = objectStore.delete(key);//ensure this object is valid?
 
         return new Promise((resolve, reject) => {
-            transaction.oncomplete = () => {resolve();};
-            transaction.onerror = (event) => {reject(event.target.error);};
-            request.onsuccess = (event) => {console.log(`Data deleted from ${storeName} successfully`);};
-            request.onerror = (event) => {console.error(`Error deleting data from ${storeName}:`, event.target.error);};
+            let result;
+            request.onsuccess = () => {
+                result = request.result;
+            };
+            transaction.oncomplete = () => {
+                resolve(result);
+            };
+            transaction.onerror = (event) => {
+                reject(event.target.error);
+            };
+            transaction.onabort = (event) => {
+                reject(event.target.error);
+            }
+        });
+    }
+
+    //Generic clear operation
+    async clearRecords(storeName) {
+
+        //Ensure database exists
+        if (!this.db) {
+            throw new Error("Database not initialized");
+        }
+
+        //Create transaction, access store, create request to clear data
+        const transaction = this.db.transaction([storeName], "readwrite");
+        const objectStore = transaction.objectStore(storeName);
+        const request = objectStore.clear();
+
+        return new Promise((resolve, reject) => {
+            let result;
+            request.onsuccess = () => {
+                result = request.result;
+            };
+            transaction.oncomplete = () => {
+                resolve(result);
+            };
+            transaction.onerror = (event) => {
+                reject(event.target.error);
+            };
+            transaction.onabort = (event) => {
+                reject(event.target.error);
+            }
         });
     }
 }
-
-
-
 
 export {GenericDataManager};

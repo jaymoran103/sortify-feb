@@ -1,3 +1,4 @@
+//renamed dataManager->playlistDataManager, keeping as a POC but moving toward a more generic IDB wrapper and playlist specific logic in the app.js handlers
 import {SampleTracks} from "./sampleDataGenerator.js";
 
 class DataManager {
@@ -60,7 +61,7 @@ class DataManager {
                 console.table(event.target.result);
                 resolve(event.target.result);
             };
-            request.onerror = (event) => {//TODO down the road, reject on transaction error instead of request
+            request.onerror = (event) => {
                 console.error("Error creating playlist:", event.target.error);
                 reject(event.target.error);
             };
