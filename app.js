@@ -1,4 +1,4 @@
-import {GenericDataManager} from "./genericDataManager.js";
+import DataManager from "./dataManager.js";
 import {SampleTracks} from "./sampleDataGenerator.js";
 
 function addEventListeners() {
@@ -111,7 +111,7 @@ function getDesiredID(){
     return parseInt(id);
 }
 
-const dataManager = new GenericDataManager();
+const dataManager = new DataManager();
 const sampleTracks = new SampleTracks();
 dataManager.init();
 addEventListeners();
