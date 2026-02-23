@@ -1,12 +1,37 @@
 body {
     font-family: 'Roboto', sans-serif;
-    background-color: #cccccc;
+    background-color: #212121;
     margin: 0;
     padding: 20px;
 }
+h1, h2, h3 {
+    color: rgb(216, 216, 216);
+}
 button {
-    background-color: rgb(93, 161, 255);
+    background-color: rgb(65, 137, 56);
     color: rgb(0, 0, 0);
     padding: 10px 20px;
     cursor: pointer;
 }
+
+table{
+    /* border-collapse: collapse; */
+    width: 100%;
+
+    th,td {
+        background-color: #3e3e3e;
+        border-width: 2px;
+        border-color: rgb(0, 0, 0);
+        /* border-style: solid; */
+        
+
+        padding: 5px;
+        color: rgb(203, 203, 203);
+        text-align: left;
+    }
+    tr:nth-child(even) {
+        background-color: #303030;
+    }
+}
+
+
