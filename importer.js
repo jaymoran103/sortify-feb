@@ -2,8 +2,16 @@ import { createPlaylist, createTrack } from "./models.js";
 
 class Importer {
 
+    constructor() {
+        this.resetStats();
+    }
 
-
+    //Track stats about the import process, just for console printing for now
+    resetStats() {
+        this.totalTracksProcessed = 0;
+        this.uniqueTracksAdded = 0;
+        this.invalidTracksSkipped = 0;
+    }
 
     //import playlist from CSV file, creating track records as needed and linking to new playlist record.
     async importPlaylistCSV(dataManager,file) {
@@ -29,13 +37,15 @@ class Importer {
         for (let i = 1; i < lines.length; i++) {
             const columns = parseCSVLine(lines[i]);
 
-            //Store track if not already in database, then add track ID for 
-            await this.storeTrackIfNeeded(dataManager,columns);
-            trackIDs.push(columns[trackIDIndex]);
+            //Store track if not already in database, then add track ID for playlist (storeTrackIfNeeded returns true unless a validation error occurs)
+            let validTrack = await this.storeTrackIfNeeded(dataManager,columns);
+            if (validTrack) {
+                trackIDs.push(columns[trackIDIndex]);
+            }
 
         }
         await this.storePlaylist(dataManager,playlistName,trackIDs);
-                
+        this.totalTracksProcessed += (lines.length - 1);                
     }
 
     // Helper function reads a csv file as text, returning a promise that resolves with the file contents
@@ -57,7 +67,7 @@ class Importer {
         const newPlaylist = createPlaylist(playlistName, trackIDs);
         try {
             await dataManager.createRecord("playlists", newPlaylist);
-            console.log(`Created new playlist '${playlistName}' with ${trackIDs.length} tracks and stored in database`)
+            // console.log(`Created new playlist '${playlistName}' with ${trackIDs.length} tracks and stored in database`)
         }
         catch (error) {
             console.error(`Error storing playlist '${playlistName}' in database:`, error);
@@ -67,34 +77,79 @@ class Importer {
 
     
     // Helper function checks if track already exists in database, creating new track record if not
+    // Returns true if track is valid (regardeless of presence in database), false if track is invalid/malformed and should be skipped
     async storeTrackIfNeeded(dataManager,columns){
+
+        
         const trackID = columns[0].trim();
 
         // Check if track already exists in database, skipping if so
         let dbTrack = await dataManager.getRecord("tracks", trackID);
         if (dbTrack) {
-            // console.log(`Track with ID '${trackID}' already exists in database, skipping creation`);
-            return;
+            // console.log(`Track'${trackID}' already stored!`);
+            return true;
         }
+        //FUTURE - if valildation gets more complex, this could go the class/type I implement for models down the road
+        const requiredFields = {
+            trackID: trackID,
+            title: columns[1],
+            artist: columns[2],
+            album: columns[3], //FUTURE - account for case where an artist name actually contains a semicolon
+        }
+        // Validate required fields, skipping track if any are missing/invalid
+        if (!isValidTrackData(requiredFields)) {
+            // console.warn(`Skipping track with ID '${trackID}' due to missing required fields`);
+            this.invalidTracksSkipped++;
+            return false;
+        }
+
+        
         // Create a new track object
         const newTrack = createTrack(
             trackID,   //ID
-            columns[1],//title
-            columns[3].replace(/;/g, ', '), //artist //FUTURE - account for case where an artist name actually contains a semicolon
-            columns[2],//album
-
+            requiredFields.title,
+            requiredFields.album,//album
+            requiredFields.artist.replace(/;/g, ', '), //artist //FUTURE - account for case where an artist name actually contains a semicolon
         );
         try {
             await dataManager.createRecord("tracks", newTrack);
+            // console.log(`Added '${trackID}' to database`);
+            this.uniqueTracksAdded++;
+            return true;
+
         }
         catch (error) {
             console.error(`Error storing track with ID '${trackID}' in database:`, error);
-            return;
+            return false;//TODO should this be true or false? till we're managing duplicates, I lean toward false, safer to skip
         }
     }
 }
 
+//Helper method ensures no given field is empty, undefined, or equal to "undefined" 
+//TODO log skipped/invalid tracks somewhere visible to user? Nothing here is unexpected, but it'd be good form to notify them
+function isValidTrackData(trackData) {
+    
+    if (trackData.trackID && trackData.trackID.includes(":local:")) {
+        console.warn(`Track ID '${trackData.trackID}' is a local file, which isn't yet supported. Skipping.`);
+        return false;
+    }
+    // console.log(`Validating track data for ID '${trackData.trackID}' - Title: '${trackData.title}', Artist: '${trackData.artist}', Album: '${trackData.album}'`);
+    for (const key in trackData) {
+        if (!trackData[key] || trackData[key] === "undefined") {
+
+            //Slightly ugly, provide trackID or title if available.
+            let identifier = trackData.trackID ? `ID '${trackData.trackID}'` : (trackData.title ? `Title '${trackData.title}'` : 'Unidentified track');
+
+            console.warn(`Missing or invalid field '${key}' for '${identifier}'. Skipping this track.`);
+            return false;
+        }
+    }
+    
+    return true;
+}
+
 // Helper function parses a csv line, handling quoted fields and commas within quotes
+//TODO consider case where a line contains uneven quotes?
 function parseCSVLine(line) {
     const fields = [];
     let current = '';
