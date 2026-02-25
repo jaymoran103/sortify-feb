@@ -17,29 +17,39 @@ class AppIteration2{
     }
 
     addEventListeners() {
-        document.getElementById("getAllPlaylistsButton").addEventListener("click", this.handleGetAllPlaylists.bind(this));
+        document.getElementById("viewAllPlaylistsButton").addEventListener("click", this.handleViewAllPlaylists.bind(this));
         document.getElementById("clearDisplayButton").addEventListener("click", this.handleClearDisplay.bind(this));
-        document.getElementById("csvFileInput").addEventListener("change", this.handleFileSelection.bind(this));
+        document.getElementById("csvFileInput").addEventListener("change", this.handleImport.bind(this));
         document.getElementById("clearStorageButton").addEventListener("click", this.handleClearStorage.bind(this));
         document.getElementById("clearStorageButton").addEventListener("click", this.handleClearDisplay.bind(this));
     }
 
-    // Updates the file count label whenever a selection changes.
-    // For now, triggers import right away, displays new results.
-    async handleFileSelection() {
 
+    // Handler for file selection event: update label, trigger import, display results
+    async handleImport(){
+
+        //Report action to console, update label to indicate state on page
+        console.log("Importing...");
         const label = document.getElementById("file-count-label");
         label.textContent = "loading playlists...";
 
-        //trigger import and refresh display
-        this.handleClearDisplay();
+        //Get files from selector, returning if empty/undefined
+        const files = this.getSelectedFiles();
+        if (!files || files.length === 0) {
+            console.warn("No files selected for import");
+            return;
+        }
 
-        await this.handleImport();
-        await this.handleGetAllPlaylists();
-        
+        //Perform import 
+        await this.importFiles(files);
+
+        //Refresh display to show new playlists (using non-handler functions)
+        this.clearDisplay();
+        await this.showAllPlaylists();
+
         //reset file input and label for next import
         document.getElementById("csvFileInput").value = "";
-        document.getElementById("file-count-label").textContent = "";
+        document.getElementById("file-count-label").textContent = "";        
     }
     
     //Get files from selector, return as Array if files exist
@@ -48,14 +58,8 @@ class AppIteration2{
         return (fileInput.files.length > 0) ? Array.from(fileInput.files) : [];
     }
 
-    async handleImport() {
-
-        //Get files from selector, returning if empty
-        const files = this.getSelectedFiles();
-        if (files.length === 0) {
-            console.warn("No files selected for import");
-            return;
-        }
+    // Carries out import flow: for each file, attempt to import to IDB, tally successes and failures, report results to console.
+    async importFiles(files) {
 
         //For each file, try to import, tracking successes and failures
         let successCount = 0;
@@ -72,49 +76,72 @@ class AppIteration2{
             }
         }
 
-        //reset components, log results
-
         console.log(`Import completed: ${successCount} successful, ${failCount} failed.`)
     }
 
-    async handleGetAllPlaylists() {
-        console.log("Button clicked: Get All Playlists");
+    // Handle button click to display all playlists (wraps showAllPlaylists)
+    async handleViewAllPlaylists(){
+        console.log("Button clicked: View All Playlists");
+        this.showAllPlaylists();
+    }
+
+    //Gets all playlists from database, rendering a table for each.
+    async showAllPlaylists(){
+
+        //Try to retrieve all playlists from database
+        let records;
         try {
-            let records = await this.dataManager.getAllRecords("playlists");
-            if (records.length === 0) {
-                console.log("No playlists found in the database.");
-                return;
-            }
-            else{
-                console.log(`All playlists (${records.length}) retrieved successfully:`);
-                console.table(records);
-                for (const record of records){
-                    await renderPlaylistTable(this.dataManager, record);
-                }
-            }
+            records = await this.dataManager.getAllRecords("playlists");
         }
         catch (error) {
             console.error("Error retrieving all playlists:", error);
         }
+
+        //If records exist, try to render each as table
+        if (records && records.length > 0) {
+            try{
+                for (const record of records){
+                    await renderPlaylistTable(this.dataManager, record);
+                }
+            }
+            catch (error){
+                console.error("Error rendering playlist tables:", error);
+            }
+        } else {
+            console.log("No playlists found in the database, or an error occurred during retrieval.");
+        }
     }
 
+    //Handle button click to clear display (wraps clearDisplay)
     handleClearDisplay() {
         console.log("Button clicked: Clear Display");
+        this.clearDisplay();
+    }
+
+    // Clears playlist display container on page
+    clearDisplay(){
         const container = document.getElementById('playlist-container');
         container.innerHTML = '';
     }
 
+    // Handle button click to clear all records in both stores.
     async handleClearStorage() {
-    console.log("Button clicked: Clear Storage");
-    try {
-        await this.dataManager.clearRecords("playlists");
-        await this.dataManager.clearRecords("tracks");
-        console.log("All playlists and tracks deleted successfully");
+        console.log("Button clicked: Clear Storage");
+        for (const storeName of ["tracks", "playlists"]){
+            try {
+                await this.dataManager.clearRecords(storeName);
+                console.log(`All records in ${storeName} deleted successfully`);
+            }
+            catch (error) {
+                console.error(`Error deleting all records in ${storeName}:`, error);
+            }        
+        }
+
+        //clear display to reflect cleared storage
+        this.clearDisplay();
     }
-    catch (error) {
-        console.error("Error deleting all playlists and tracks:", error);
-    }
-}
+
+
 
 
 }

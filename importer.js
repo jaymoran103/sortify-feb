@@ -2,21 +2,10 @@ import { createPlaylist, createTrack } from "./models.js";
 
 class Importer {
 
-    readFileAsText(file){
-        return new Promise((resolve, reject) => {
-            const reader = new FileReader();
-            reader.onload = (event) => {
-                resolve(event.target.result);
-            }
-            reader.onerror = (event) => {
-                reject(event.target.error);
-            }
-            reader.readAsText(file);
-        });
-    }
 
 
-    //
+
+    //import playlist from CSV file, creating track records as needed and linking to new playlist record.
     async importPlaylistCSV(dataManager,file) {
 
         // console.log(`Importing playlist from file: ${file.name}`);
@@ -42,14 +31,28 @@ class Importer {
 
             //Store track if not already in database, then add track ID for 
             await this.storeTrackIfNeeded(dataManager,columns);
-            trackIDs.push(unwrapQuotes(columns[trackIDIndex]));
+            trackIDs.push(columns[trackIDIndex]);
 
         }
         await this.storePlaylist(dataManager,playlistName,trackIDs);
                 
     }
-    
 
+    // Helper function reads a csv file as text, returning a promise that resolves with the file contents
+    readFileAsText(file){
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                resolve(event.target.result);
+            }
+            reader.onerror = (event) => {
+                reject(event.target.error);
+            }
+            reader.readAsText(file);
+        });
+    }
+
+    // Helper function stores playlist in database, logging success or failure
     async storePlaylist(dataManager, playlistName, trackIDs){
         const newPlaylist = createPlaylist(playlistName, trackIDs);
         try {
@@ -62,8 +65,10 @@ class Importer {
         }
     }
 
+    
+    // Helper function checks if track already exists in database, creating new track record if not
     async storeTrackIfNeeded(dataManager,columns){
-        const trackID = unwrapQuotes(columns[0].trim());
+        const trackID = columns[0].trim();
 
         // Check if track already exists in database, skipping if so
         let dbTrack = await dataManager.getRecord("tracks", trackID);
@@ -74,9 +79,9 @@ class Importer {
         // Create a new track object
         const newTrack = createTrack(
             trackID,   //ID
-            unwrapQuotes(columns[1]),//title
-            unwrapQuotes(columns[3]).replace(/;/g, ', '), //artist //FUTURE - account for case where an artist name actually contains a semicolon
-            unwrapQuotes(columns[2]),//album
+            columns[1],//title
+            columns[3].replace(/;/g, ', '), //artist //FUTURE - account for case where an artist name actually contains a semicolon
+            columns[2],//album
 
         );
         try {
@@ -89,19 +94,19 @@ class Importer {
     }
 }
 
-
-
-
+// Helper function parses a csv line, handling quoted fields and commas within quotes
 function parseCSVLine(line) {
     const fields = [];
     let current = '';
     let inQuotes = false;
 
+    // Iterate through each character in the line, building fields based on commas and quotes
     for (let i = 0; i < line.length; i++) {
         const char = line[i];
-        if (char === '"') {
+        
+        if (char === '"') {// Toggle inQuotes flag when encountering a quote character
             inQuotes = !inQuotes;
-        } else if (char === ',' && !inQuotes) {
+        } else if (char === ',' && !inQuotes) {// Comma outside of quotes indicates end of field
             fields.push(current.trim());
             current = '';
         } else {
@@ -110,24 +115,7 @@ function parseCSVLine(line) {
     }
     fields.push(current.trim());// push remaining data as last field
 
-
-
     return fields;
-}
-
-
-//Helper function to remove wrapping quotes, with option to remove multiple layers of quotes if needed. 
-function unwrapQuotes(str,removeAll = false){
-    if (removeAll){
-        while (str.startsWith('"') && str.endsWith('"')) {
-            str = str.slice(1, -1);
-        }
-    } 
-    else if (str.startsWith('"') && str.endsWith('"')) {
-        str = str.slice(1, -1);
-    }
-    return str;
-
 }
 
 export default Importer;
