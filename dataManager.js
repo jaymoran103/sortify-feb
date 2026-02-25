@@ -7,13 +7,13 @@ class DataManager {
     // Initialize IndexedDB
     async init() {
         return new Promise((resolve, reject) => {
-            const request = indexedDB.open("SortifyDB", 2);
+            const request = indexedDB.open("SortifyDB", 4);
 
             request.onupgradeneeded = (event) => {
                 console.warn("DB Upgrade fired!");
                 this.db = event.target.result;
                 this.createObjectStore(this.db,"playlists")
-                this.createObjectStore(this.db,"tracks")
+                this.createObjectStore(this.db,"tracks",{keyPath: "trackID"});
             };
             request.onsuccess = (event) => {
                 this.db = event.target.result;
@@ -29,12 +29,10 @@ class DataManager {
     async createObjectStore(database, storeName, options = { keyPath: "id", autoIncrement: true }) {
         this.validateDB();
         if (database.objectStoreNames.contains(storeName)) {
-            console.warn(`Attempted to create Object store ${storeName}, but it already exists!`);
-            return;
+            console.warn(`Overwriting Object store ${storeName}`);
+            database.deleteObjectStore(storeName);
         }
-        else{
-            database.createObjectStore(storeName, options);
-        }
+        database.createObjectStore(storeName, options);
     }
 
     //Generic create operation
@@ -61,7 +59,7 @@ class DataManager {
         const request = objectStore.get(key);
 
         return this.createPromise(transaction, request);//FUTURE: add check for empty array here instead of checking in callers?
-    }   
+    } 
 
     //Generic get all operation
     async getAllRecords(storeName) {

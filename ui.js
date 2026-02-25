@@ -1,28 +1,29 @@
-import { SampleTracks } from "./sampleDataGenerator.js";
-
-export function renderPlaylistTable(playlist){
+export async function renderPlaylistTable(dataManager,playlist){
     // Leaving until all source data is coming from proper model
     // if (playlist.type !== "playlist"){
     //     console.error("Invalid playlist object:", playlist);//Indicate something went wrong with the given data
     // }
 
-    console.log(`Rendering playlist '${playlist.name}' with ${playlist.trackIDs.length} tracks`);
+    // console.log(`Rendering playlist '${playlist.name}' with ${playlist.trackIDs.length} tracks`);
 
     //Get container, create div for playlist
     const container = document.getElementById('playlist-container');
     const playlistDiv = document.createElement('div');
 
+    //Track row index for display
+    let rowNumber = 0;
+
     //Set playlist name as header, create table for tracks
     playlistDiv.innerHTML = `
-        <h3>${playlist.name} - id:${playlist.id}</h3>
+        <h3>${playlist.name} - ${playlist.trackIDs.length} tracks</h3>
         <table>
             <thead>
-                ${renderPlaylistHeader(playlist)}
+                ${renderPlaylistHeader()}
             </thead>    
             <tbody>
-                ${playlist.trackIDs.map(trackID => {
-                    return renderPlaylistRow(trackID);
-                }).join('')}
+                ${await Promise.all(playlist.trackIDs.map(async (trackID) => {
+                    return await renderPlaylistRow(dataManager,trackID,++rowNumber);
+                })).then(rows => rows.join(''))}
             </tbody>
         </table>
     `;
@@ -31,10 +32,10 @@ export function renderPlaylistTable(playlist){
 
 }
 
-export function renderPlaylistHeader(playlist){
+export function renderPlaylistHeader(){
     return `
         <tr>
-            <th>ID</th>
+            <th>#</th>
             <th>Title</th>
             <th>Album</th>
             <th>Artist</th>
@@ -42,21 +43,30 @@ export function renderPlaylistHeader(playlist){
     `;
 }
 
-export function renderPlaylistRow(trackID){
-    const trackData = getTrackByID(trackID);
-    console.log(`Rendering track '${trackData.title}' by '${trackData.artist}' from album '${trackData.album}'`);
-    return `<tr>
-                <td>${trackData.trackID}</td>
+export async function renderPlaylistRow(dataManager,trackID,index){
+
+    //Get track data from trackID
+    const trackData = await getTrackByID(dataManager,trackID);
+
+    //return table row or error info if not found
+    if (trackData) {
+
+        return `<tr>
+                <td>${index}</td>
                 <td>${trackData.title}</td>
                 <td>${trackData.artist}</td>
                 <td>${trackData.album}</td>
             </tr>`;
+            //<td>${trackData.trackID.slice(14)}</td>
+
+    } else{
+        console.error(`No track found for ID: ${trackID}`);
+        return `<tr><td colspan="4">Track ${trackID} not found</td></tr>`;
+    }
 }
 
-//TODO replace with proper retrieval once DB
-function getTrackByID(trackID){
-    const sampleTracks = new SampleTracks();
-    return sampleTracks.getDataFromID(trackID);
+async function getTrackByID(dataManager,trackID){
+    return await dataManager.getRecord("tracks", trackID);
 }
 
 export function clearPlaylists() {
