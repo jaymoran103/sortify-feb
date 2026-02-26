@@ -80,7 +80,6 @@ class Importer {
     // Returns true if track is valid (regardeless of presence in database), false if track is invalid/malformed and should be skipped
     async storeTrackIfNeeded(dataManager,columns){
 
-        
         const trackID = columns[0].trim();
 
         // Check if track already exists in database, skipping if so
@@ -93,8 +92,9 @@ class Importer {
         const requiredFields = {
             trackID: trackID,
             title: columns[1],
-            artist: columns[2],
-            album: columns[3], //FUTURE - account for case where an artist name actually contains a semicolon
+            album: columns[2],
+            artist: columns[3].replace(/;/g, ', '),
+            //FUTURE - account for case where an artist name actually contains a semicolon
         }
         // Validate required fields, skipping track if any are missing/invalid
         if (!isValidTrackData(requiredFields)) {
@@ -109,7 +109,7 @@ class Importer {
             trackID,   //ID
             requiredFields.title,
             requiredFields.album,//album
-            requiredFields.artist.replace(/;/g, ', '), //artist //FUTURE - account for case where an artist name actually contains a semicolon
+            requiredFields.artist, //artist //FUTURE - account for case where an artist name actually contains a semicolon
         );
         try {
             await dataManager.createRecord("tracks", newTrack);

@@ -28,7 +28,7 @@ class SampleTracks{
             "artist": "Sherman Robertson"
         }
         this.trackData3 = {
-            "trackID": "track",
+            "trackID": "track3",
             "title": "Little Angel Child",
             "album": "Fast Fingers",
             "artist": "Jimmy Dawkins"
@@ -39,7 +39,26 @@ class SampleTracks{
             "album": "Living Chicago Blues, Vol. 4",//Compilation album, "Various Artists" is unlinked. might cause interesting behavior down the road
             "artist": "Luther \"Guitar Junior\" Johnson"//escape character shows up in console but not on page, keep an eye on and ensure these are handled right for real data
         }
-        this.tracks = [this.trackData0,this.trackData1,this.trackData2,this.trackData3,this.trackData4]
+        this.trackData5 = {
+            "trackID": "track5",
+            "title": "Sweet Home Chicago",
+            "album": "West Side Soul (Deluxe Edition)",
+            "artist": "Magic Sam;Mighty Joe Young;Stockholm Slim;Earnest Johnson;Odie Payne, Jr."
+        }
+        this.trackData6= {
+            "trackID": "track6",
+            "title": "Statesboro Blues",
+            "album": "Taj Mahal",
+            "artist": "Taj Mahal"
+        }
+        this.trackData7 = {
+            "trackID": "track7",
+            "title": "Pride and Joy",
+            "album": "Texas Flood",
+            "artist": "Stevie Ray Vaughan"
+        }
+        
+        this.tracks = [this.trackData0,this.trackData1,this.trackData2,this.trackData3,this.trackData4,this.trackData5,this.trackData6,this.trackData7]
         this.trackIDs = this.tracks.map(track => track.trackID);
     }
 
@@ -93,9 +112,16 @@ class SampleTracks{
         return createPlaylist("Random Playlist "+ Date.now(), randomTrackIDs);
     }
 
-
-
-
+    getWorkspaceData() {
+        return {
+            tracks: this.tracks.map(track => createTrack(track.trackID, track.title, track.album, track.artist)),//TODO switch to doing this in this.tracks by default, if theres even further use for this once real data is integrated
+            playlists: [
+                createPlaylist("All Blues", ["track1", "track2", "track3", "track4","track5","track6","track7"]),
+                createPlaylist("Old Blues", ["track1", "track3", "track5", "track4"]),
+                createPlaylist("Best Riffs", ["track1", "track4", "track5", "track7"])
+            ]
+        };
+    }
 
     //------
     // TODO dont really need these, keeping for now
@@ -114,4 +140,4 @@ class SampleTracks{
 
 }
 
-export {SampleTracks};
+export default SampleTracks ;

@@ -54,8 +54,9 @@ export async function renderPlaylistRow(dataManager,trackID,index){
         return `<tr>
                 <td>${index}</td>
                 <td>${trackData.title}</td>
-                <td>${trackData.artist}</td>
                 <td>${trackData.album}</td>
+                <td>${trackData.artist}</td>
+
             </tr>`;
             //<td>${trackData.trackID.slice(14)}</td>
 

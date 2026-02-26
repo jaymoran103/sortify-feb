@@ -29,9 +29,9 @@ table{
         color: rgb(203, 203, 203);
         text-align: left;
     }
-    tr:nth-child(even) {
+    /* tr:nth-child(even) {
         background-color: #303030;
-    }
+    } */
 }
 
 

@@ -22,6 +22,13 @@ class AppIteration2{
         document.getElementById("clearStorageButton").addEventListener("click", this.handleClearStorage.bind(this));
 
         document.getElementById("importButton").addEventListener("click", this.handleImport.bind(this));
+        document.getElementById("open-workspace-btn").addEventListener("click", this.handleOpenWorkspace.bind(this));
+    }
+
+    // Navigate to the workspace page
+    handleOpenWorkspace() {
+        console.log("Button clicked: Open Workspace");
+        window.location.href = "workspace.html";
     }
 
     // Handle button click to display all playlists (wraps showAllPlaylists)

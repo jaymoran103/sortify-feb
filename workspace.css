@@ -1,0 +1,102 @@
+
+/* Full viewport height flex-column layout, overriding the default body padding */
+body {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    padding: 0;
+    margin: 0;
+    overflow: hidden;
+}
+
+/* //Header */
+#workspace-header {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    padding: 10px 20px;
+    background-color: #2a2a2a;
+    flex-shrink: 0;
+    border-bottom: 2px solid #000;
+}
+
+#workspace-header h1 {
+    flex: 1;
+    margin: 0;
+    font-size: 1.3rem;
+}
+
+#save-controls {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+#save-status {
+    color: gray;
+    font-size: 0.88em;
+    font-family: 'Roboto', sans-serif;
+    min-width: 150px;
+}
+
+
+/* //Scrollable workspace area */
+#workspace-container {
+    flex: 1;
+    overflow: auto;
+    padding: 20px;
+}
+
+/* Table */
+#workspace-table {
+    border-collapse: collapse;
+    width: max-content;
+    /* width: 100%; */
+}
+
+#workspace-table th,
+#workspace-table td {
+    background-color: #3e3e3e;
+    border: 2px solid #000;
+    padding: 6px 10px;
+    color: #cccccc;
+    text-align: left;
+    vertical-align: middle;
+}
+
+#workspace-table th {
+    background-color: #2e2e2e;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+/* Track info cells */
+
+.track-title-cell {
+    color: #cccccc;
+    font-weight: bold;
+    /* min-width: 250px; */
+
+}
+.track-artist-cell, .track-album-cell {
+    color: #aaaaaa;
+    /* min-width: 250px; */
+    max-width: 300px; /* //TODO make columns resizable*/
+   
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* Checkbox cells */
+.checkbox-cell {
+    text-align: center;
+    min-width: 90px;
+}
+
+.checkbox-cell input[type="checkbox"] {
+    min-width: 15px;
+    min-height: 15px;
+    cursor: pointer;
+    accent-color: rgb(65, 137, 56);
+}
