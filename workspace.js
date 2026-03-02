@@ -66,12 +66,14 @@ function renderTableHeader() {
 }
 
 function renderTableBody() {
+
+    //Wipe existing table body
     const tbody = document.getElementById("table-body");
     tbody.innerHTML = "";
 
-    // Collect unique track IDs across all playlists (preserving first-seen order)
+    // Collect unique track IDs across all playlists (preserving first-seen order.)//TODO think about cases with duplicates within a playlist, should be fine to reduce to one.
     const seen = new Set();
-    const allTrackIDs = [];
+    const allTrackIDs = [];//FUTURE determine order of playlists checked by user input or order added
     for (const playlist of playlists) {
         for (const tid of playlist.trackIDs) {
             if (!seen.has(tid)) {
@@ -173,20 +175,25 @@ function updateSaveStatus() {
     const saveStatus = document.getElementById("save-status");
 
     if (modifiedPlaylists.size > 0) {
+        const saveBtn = document.getElementById("save-btn");
+        saveBtn.disabled = false;
         saveStatus.textContent = `${modifiedPlaylists.size} playlist(s) modified`;
     } else {
+        const saveBtn = document.getElementById("save-btn");
+        saveBtn.disabled = true;
         saveStatus.textContent = "";
     }
 }
-//currently just logs modifications to console, //TODO use dataManager to persist changes
+//Handler for save button click: logs modified playlists and their trackIDs, disables button, then resets modifiedPlaylists and updates save status.
+//TODO use dataManager to persist changes
 function handleSave() {
+
+    //Disable save button, log modified playlists and their trackIDs
+    const saveBtn = document.getElementById("save-btn");
+    saveBtn.disabled = true;
     console.log("Saving modified playlists:", [...modifiedPlaylists]);
 
-    const saveBtn = document.getElementById("save-btn");
-    saveBtn.textContent = "Saving...";
-    saveBtn.disabled = true;
-
-    // Log the trackIDs for each modified playlist\
+    // Log the trackIDs for each modified playlist
     for (const playlistID of modifiedPlaylists) {
         let playlist = playlists.find(p => p.playlistID === playlistID);
         if (playlist) {
@@ -198,10 +205,8 @@ function handleSave() {
 
     modifiedPlaylists.clear();
 
-    //TODO disable button by default, enabling whenever modifiedPlaylists isn't empty
+    //Update save status to temporarily show "Changes Saved!" before clearing after a short delay. //TODO show something else for failed attempts?
     const saveStatus = document.getElementById("save-status");
-    saveBtn.disabled = false;
-    saveBtn.textContent = "Save";
     saveStatus.textContent = "Changes Saved!";
 
     setTimeout(() => {

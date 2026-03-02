@@ -14,24 +14,38 @@ button {
     cursor: pointer;
 }
 
-table{
-    /* border-collapse: collapse; */
-    width: 100%;
-
-    th,td {
-        background-color: #3e3e3e;
-        border-width: 2px;
-        border-color: rgb(0, 0, 0);
-        /* border-style: solid; */
-        
-
-        padding: 5px;
-        color: rgb(203, 203, 203);
-        text-align: left;
-    }
-    /* tr:nth-child(even) {
-        background-color: #303030;
-    } */
+button:hover {
+    background-color: rgb(46, 198, 79);
+    text-decoration: underline;
+    font-weight: 500;
 }
 
+/* Table */
 
+table{
+    border-collapse: collapse;
+    /* width: max-content; */
+
+    width: 100%;
+}
+
+table th,tr {
+    background-color: #3e3e3e;
+    border: 2px solid #000;
+    padding: 6px 10px;
+    color: #cccccc;
+    text-align: left;
+}
+table td{
+    padding: 5px;
+    border: 2px solid #000;
+}
+table th {
+    background-color: #505050;
+    font-weight: 600;
+    white-space: nowrap;
+}
+table tr:hover {
+    background-color: #606060;
+    /* color: #ffffff; */
+}
