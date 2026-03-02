@@ -49,3 +49,12 @@ table tr:hover {
     background-color: #606060;
     /* color: #ffffff; */
 }
+
+#playlist-select-panel{
+    display: none;
+    padding: 12px;
+    border: 2px solid #555;
+    margin: 10px 0;
+    background: #2a2a2a;
+    color: #cccccc;
+}

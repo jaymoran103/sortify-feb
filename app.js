@@ -22,12 +22,109 @@ class AppIteration2{
         document.getElementById("clearStorageButton").addEventListener("click", this.handleClearStorage.bind(this));
 
         document.getElementById("importButton").addEventListener("click", this.handleImport.bind(this));
-        document.getElementById("open-workspace-btn").addEventListener("click", this.handleOpenWorkspace.bind(this));
+        document.getElementById("open-workspace-all-btn").addEventListener("click", this.handleOpenWorkspaceAll.bind(this));
+        document.getElementById("open-workspace-select-btn").addEventListener("click", this.handleOpenWorkspaceSelect.bind(this));
     }
 
-    // Navigate to the workspace page
-    handleOpenWorkspace() {
-        console.log("Button clicked: Open Workspace");
+    // Handle button click to open workspace with ALL playlists 
+    async handleOpenWorkspaceAll() {
+        console.log("Button clicked: Open Workspace (all playlists)");
+        let allPlaylists;
+        try {
+            allPlaylists = await this.dataManager.getAllRecords("playlists");
+        } catch (err) {
+            console.error("Failed to fetch playlists for workspace:", err);
+            return;
+        }
+
+        if (!allPlaylists || allPlaylists.length === 0) {
+            this.showWarning("No playlists in IndexedDB — import some first");
+            return;
+        }
+
+        const ids = allPlaylists.map(p => p.id);
+        this.openWorkspaceWithPlaylists(ids);
+    }
+
+    // Handle button click to open workspace with selected playlists - shows selection UI first
+    async handleOpenWorkspaceSelect() {
+        console.log("Button clicked: Open Workspace (select playlists)");
+        let allPlaylists;
+        try {
+            allPlaylists = await this.dataManager.getAllRecords("playlists");
+        } catch (err) {
+            console.error("Failed to fetch playlists for selection UI:", err);
+            return;
+        }
+
+        if (!allPlaylists || allPlaylists.length === 0) {
+            this.showWarning("No playlists in IndexedDB — import some first");
+            return;
+        }
+
+        this.showPlaylistSelectionUI(allPlaylists);
+    }
+
+    // Render a simple selection panel  - display each playlist with its name, track count, and a checkbox for selection.
+    showPlaylistSelectionUI(playlists) {
+        const panel = document.getElementById("playlist-select-panel");
+        const list = document.getElementById("playlist-select-list");
+
+        // Render each playlist as a checkbox item with name and track count. 
+        // Checkbox values are playlist ids 
+        list.innerHTML = playlists.map(pl => `
+            <label style="display:block; padding: 4px 0; cursor:pointer;">
+                <input type="checkbox" class="playlist-select-checkbox" value="${pl.id}" unchecked />
+                ${pl.name} &mdash; ${(pl.trackIDs || []).length} tracks
+            </label>
+        `).join("");
+
+        panel.style.display = "block";
+        console.log(`Opened selection panel with ${playlists.length} playlists`);
+
+        // One-time confirm handler
+        document.getElementById("confirm-select-btn").addEventListener("click", () => {
+            const checked = [...list.querySelectorAll(".playlist-select-checkbox:checked")];
+            const selectedIds = checked.map(cb => Number(cb.value)); // IDB ids are numeric
+            this.cleanupSelectorUI();
+
+            if (selectedIds.length === 0) {
+                this.showWarning("No playlists selected. Please check at least one playlist to open the workspace.");
+                return;
+            }
+
+            console.log("Selected playlist IDs:", selectedIds);
+            this.openWorkspaceWithPlaylists(selectedIds);
+        });
+
+        document.getElementById("cancel-select-btn").addEventListener("click", () => {
+            console.log("Playlist selection cancelled");
+            this.cleanupSelectorUI();
+        });
+    }
+
+    // Helper method: hides selector panel and strips event listeners by replacing buttons with clones.
+    // FUTURE - works fine, but better just to create the panel once and show/hide as needed? This probably isnt a permanent feature so im not going too deep rn.
+    cleanupSelectorUI(){
+        const panel = document.getElementById("playlist-select-panel");
+        panel.style.display = "none";
+
+        const confirmBtn = document.getElementById("confirm-select-btn");
+        confirmBtn.replaceWith(confirmBtn.cloneNode(true));
+
+        const cancelBtn = document.getElementById("cancel-select-btn");
+        cancelBtn.replaceWith(cancelBtn.cloneNode(true));
+    }
+
+    // Save playlist IDs to sessionStorage and navigate to workspace.
+    // TODO add session format to models.js: { playlistIds: number[], timestamp: string }
+    openWorkspaceWithPlaylists(playlistIds) {
+        const workspaceSession = {
+            playlistIds,
+            timestamp: new Date().toISOString()
+        };
+        sessionStorage.setItem("workspaceSession", JSON.stringify(workspaceSession));
+        console.log("Saved workspaceSession to sessionStorage:", workspaceSession);
         window.location.href = "workspace.html";
     }
 
@@ -69,7 +166,7 @@ class AppIteration2{
         //Get files from selector, returning if empty/undefined
         const files = await this.doFileSelection();
         if (!files || files.length === 0) {
-            console.warn("No files selected for import");
+            this.showWarning("No files selected for import", "warn");
             return;
         }
 
@@ -148,7 +245,7 @@ class AppIteration2{
                 console.error("Error rendering playlist tables:", error);
             }
         } else {
-            console.log("No playlists found in the database, or an error occurred during retrieval.");
+            this.showWarning("No playlists found in the database - import some first");
         }
     }
 
@@ -158,6 +255,33 @@ class AppIteration2{
         container.innerHTML = '';
     }
 
+
+
+
+    //Helper method shows a warning message in console and as an alert on page. 
+    //For ease of testing without always checking console.
+    showWarning(message,logMode="warn",source=null){
+        //Show alert: for errors, just refer to console.
+        if (logMode === "error") {
+            alert("Error: see console for details"  );
+        } else {
+            alert(message);
+        }
+
+        //if given a source, preface console message with it.
+        if (source) {
+            message = `[${source}] ${message}`;
+        }
+
+        //log message to console with appropriate level. default to log here, but default method arg is "warn"
+        if (logMode === "error") {
+            console.error(message);
+        } else if (logMode === "warn") {
+            console.warn(message);
+        } else {
+            console.log(message);
+        }
+    }
 
 
 

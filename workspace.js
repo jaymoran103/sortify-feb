@@ -1,32 +1,70 @@
-import SampleTracks from "./sampleDataGenerator.js";
+import WorkspaceSession from "./session.js";
 
-//Session state: in-memory representation of playlists and tracks, and a set tracking playlists with unsaved changes
-let playlists = [];        // array of playlist objects (each has trackIDSet added)
-let tracks = {};           // lookup object: trackID → track data
-let modifiedPlaylists = new Set(); // IDs of playlists with unsaved changes
+const session = new WorkspaceSession();
+// Session state: primarily managed by WorkspaceSession. module-level vars set to live references inside session after load().
+// Render functions read these directly, so pointing them at session's arrays keeps everything in sync without a second copy of the data.
+let playlists = [];        // array of playlist objects: session.playlists after init
+let tracks = {};           // lookup object: session.tracks after init
+let modifiedPlaylists = new Set(); // same Set object of playlist IDs: session.modifiedPlaylists after init
 
-function init() {
-    const sampleData = new SampleTracks();
-    const fakeData = sampleData.getWorkspaceData();
+async function init() {
 
-    // Convert tracks array → lookup object keyed by trackID
-    tracks = {};
-    for (const track of fakeData.tracks) {
-        tracks[track.trackID] = track;
+    // Read session created by the dashboard before navigating here
+    let savedSession;
+    try {
+        savedSession = JSON.parse(sessionStorage.getItem("workspaceSession"));
+    } catch (e) {
+        console.error("Failed to parse workspaceSession from sessionStorage:", e);
     }
 
-    // Build playlists, adding playlistID and a trackIDSet
-    playlists = fakeData.playlists.map((pl, id) => ({
-        ...pl, // spread original playlist data
-        playlistID: `${id}`, // format for test
-        trackIDs: [...pl.trackIDs], // clone ensures safe modification without affecting original data
-        trackIDSet: new Set(pl.trackIDs) // create set for quicker membership checks
-    }));
+    if (!savedSession || !savedSession.playlistIds) {
+        let message = "No workspace session found. Please select playlists from the dashboard.";
+        console.warn(message);
+        showSessionError(message);
+        return;
+    }
+
+    console.log(`Restoring session (created ${savedSession.timestamp}).`,
+        "Playlist IDs:", savedSession.playlistIds);
+
+    try {
+        await session.load(savedSession.playlistIds);
+    } catch (err) {
+        let message = "Failed to load playlists from IndexedDB:";
+        console.error(message, err);
+        showSessionError(message+" " + err.message);
+        return;
+    }
+
+    if (session.playlists.length === 0) {
+        showSessionError("No playlists were found for the selected IDs.");
+        return;
+    }
+
+    // Point module vars at session's live data structures. Since they're references to the same objects/arrays, mutations like toggling tracks should be immediately reflected across the board without needing to reassign or sync.
+    playlists = session.playlists;
+    tracks = session.tracks;
+    modifiedPlaylists = session.modifiedPlaylists; // same Set object- always in sync
 
     console.log("Setting up workspace for playlists:", playlists.map(p => p.name));
 
     renderWorkspace();
     setupEventListeners();
+}
+
+// Display an error message with a link back to the dashboard, used when session loading fails or no valid playlists are found.
+function showSessionError(message) {
+    const container = document.getElementById("workspace-container");
+    container.innerHTML = `
+        <div style="padding: 40px; text-align: center; color: #ccc;">
+            <p style="font-size: 1.1em; color: red;">
+                error: ${message}
+            </p>
+            <a href="index.html" style="color: green;">
+                Back to Dashboard
+            </a>
+        </div>
+    `;
 }
 
 function renderWorkspace() {
@@ -71,7 +109,7 @@ function renderTableBody() {
     const tbody = document.getElementById("table-body");
     tbody.innerHTML = "";
 
-    // Collect unique track IDs across all playlists (preserving first-seen order.)//TODO think about cases with duplicates within a playlist, should be fine to reduce to one.
+    // Collect unique track IDs across all playlists (preserving first-seen order.)//FUTURE: consider cases with duplicates within a playlist, should be fine to reduce to one.
     const seen = new Set();
     const allTrackIDs = [];//FUTURE determine order of playlists checked by user input or order added
     for (const playlist of playlists) {
@@ -90,7 +128,7 @@ function renderTableBody() {
         const track = tracks[trackID];
         const row = document.createElement("tr");
 
-        // Create and append track info cells //TODO consider making a single cell or joining cells as container. 
+        // Create and append track info cells //FUTURE consider making a single cell or joining cells as container. 
                                               // OR have a basic cell (just title+artist) and optional extra columns for album, duration, other metadata. Availabikity of album cover determines a lot, but rate limiiting might veto that for now.
         const titleCell = document.createElement("td");
         titleCell.className = "track-title-cell";
@@ -141,32 +179,12 @@ function setupEventListeners() {
     });
 
 }
-//Handler for checkbox click event: toggles track membership in playlist, then update modifiedPlaylists and save status
+// Handler for checkbox click event. State manipulation now happns in session counterpart.
 function handleCheckboxToggle(checkbox) {
-    console.log(`Checkbox toggled: ${JSON.stringify(checkbox.dataset)} - checked: ${checkbox.checked}`);
+    console.log(`Checkbox toggled: trackID=${checkbox.dataset.trackID} playlistID=${checkbox.dataset.playlistID} checked=${checkbox.checked}`);
     const trackID = checkbox.dataset.trackID;
     const playlistID = checkbox.dataset.playlistID;
-    const playlist = playlists.find(p => p.playlistID === playlistID);
-
-    if (!playlist) {
-        console.warn("playlist not found in handleCheckboxToggle: ", playlistID);
-        return;
-    }
-
-    // Update playlist trackIDs and trackIDSet based on checkbox state   
-    if (checkbox.checked) {
-        if (!playlist.trackIDSet.has(trackID)) {
-            playlist.trackIDs.push(trackID);
-            playlist.trackIDSet.add(trackID);
-        }
-        console.log(`Added '${trackID}' to '${playlist.name}'`);
-    } else {
-        playlist.trackIDs = playlist.trackIDs.filter(id => id !== trackID);
-        playlist.trackIDSet.delete(trackID);
-        console.log(`Removed '${trackID}' from '${playlist.name}'`);
-    }
-
-    modifiedPlaylists.add(playlistID);
+    session.toggleTrack(playlistID, trackID);
     updateSaveStatus();
 }
 
@@ -184,34 +202,40 @@ function updateSaveStatus() {
         saveStatus.textContent = "";
     }
 }
-//Handler for save button click: logs modified playlists and their trackIDs, disables button, then resets modifiedPlaylists and updates save status.
-//TODO use dataManager to persist changes
-function handleSave() {
-
-    //Disable save button, log modified playlists and their trackIDs
+//Handler for save button: persists modified playlists to IndexedDB via session.save(), adds timestamp for confirmation
+async function handleSave() {
     const saveBtn = document.getElementById("save-btn");
-    saveBtn.disabled = true;
-    console.log("Saving modified playlists:", [...modifiedPlaylists]);
+    const saveStatus = document.getElementById("save-status");
 
-    // Log the trackIDs for each modified playlist
-    for (const playlistID of modifiedPlaylists) {
-        let playlist = playlists.find(p => p.playlistID === playlistID);
-        if (playlist) {
-            console.log(`'${playlist.name}' updated trackIDs:`, [...playlist.trackIDs]);
-        } else {
-            console.warn(`Playlist with ID '${playlistID}' not found during save.`);
-        }
+    saveBtn.disabled = true;
+    saveStatus.textContent = "Saving...";
+    console.log("handleSave: Saving... (", modifiedPlaylists.size, "playlists)");
+
+    try {
+        await session.save();
+
+        // Task 4: show timestamp so users can confirm persistence
+        const savedTime = new Date().toLocaleTimeString();
+        saveStatus.textContent = `Saved at ${savedTime}`;
+        console.log(`[workspace] Save successful at ${savedTime}`);
+
+        setTimeout(() => {
+            // Clear status only if no new changes have been made since save completed
+            if (modifiedPlaylists.size === 0) {
+                saveStatus.textContent = `Last saved: ${savedTime}`;
+            }
+        }, 2000);
+
+    } catch (err) {
+        console.error("[workspace] Save failed:", err);
+        saveStatus.textContent = "Save failed — see console";
+        saveBtn.disabled = false; // re-enable button now so user can retry//TODO let modifiedPlaylist count determine this for consistency?
     }
 
-    modifiedPlaylists.clear();
-
-    //Update save status to temporarily show "Changes Saved!" before clearing after a short delay. //TODO show something else for failed attempts?
-    const saveStatus = document.getElementById("save-status");
-    saveStatus.textContent = "Changes Saved!";
-
-    setTimeout(() => {
-        saveStatus.textContent = "";
-    }, 2000);
+    //Timestamp should negate need to time out the status message
+    // setTimeout(() => {
+    //     saveStatus.textContent = "";
+    // }, 2000);
 }
 
 init();
