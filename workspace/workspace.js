@@ -60,7 +60,7 @@ function showSessionError(message) {
             <p style="font-size: 1.1em; color: red;">
                 error: ${message}
             </p>
-            <a href="index.html" style="color: green;">
+            <a href="../" style="color: green;">
                 Back to Dashboard
             </a>
         </div>
@@ -168,8 +168,7 @@ function setupEventListeners() {
 
     document.getElementById("save-btn").addEventListener("click", handleSave);
     document.getElementById("back-btn").addEventListener("click", () => {
-        window.location.href = "index.html";
-        // window.location.href = ".";//Looks like this finds index.html by default, leaving url simpler. not a consideration yet
+        window.location.href = "..";//Redirect to dashboard/home page
     });
     // For any checkbox change in the table body, handle toggle with reference to the event target
     document.getElementById("table-body").addEventListener("change", (e) => {

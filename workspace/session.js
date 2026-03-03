@@ -1,13 +1,9 @@
-
-
-
-
 //Session management layer for workspace. Handles loading playlists, in-memory state, and saving changes back to IDB.
 
 // Data Flow: workspace session adds {playlistID, trackIDSet} fields to IDB playlist objects, facilitating rendering and membership checks. 
 //            Strips these fields before saving back to IDB.
 
-import DataManager from "./dataManager.js";
+import DataManager from "../shared/dataManager.js";
 
 export class WorkspaceSession {
 

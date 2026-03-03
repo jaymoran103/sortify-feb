@@ -1,6 +1,6 @@
-import DataManager from "./dataManager.js";
-import Importer from "./importer.js";
-import { renderPlaylistTable } from "./ui.js";
+import DataManager from "./shared/dataManager.js";
+import Importer from "./shared/importer.js";
+import { renderPlaylistTable } from "./shared/ui.js";
 
 class AppIteration2{
 
@@ -125,7 +125,7 @@ class AppIteration2{
         };
         sessionStorage.setItem("workspaceSession", JSON.stringify(workspaceSession));
         console.log("Saved workspaceSession to sessionStorage:", workspaceSession);
-        window.location.href = "workspace.html";
+        window.location.href = "workspace/workspace.html";
     }
 
     // Handle button click to display all playlists (wraps showAllPlaylists)
