@@ -1,4 +1,26 @@
-/* Full viewport height flex-column layout, overriding the default body padding */
+/* Shared styling */
+:root {
+    --color-bg:          #212121;
+    --color-header-page: #222;
+    --color-header-table:#222;
+    --color-row:         #333;
+    --color-row-hover:   #444;
+    --color-border:      #000;
+    --color-text:        #ccc;
+    --color-text-muted:  #888;
+    --color-button-text: #000;
+
+    --color-green:       rgb(65, 137, 56);
+    --color-green-hover: rgb(46, 198, 79);
+    --color-disabled:    rgb(120, 120, 120);
+
+    --transition-fast: 200ms ease;
+}
+
+*, *::before, *::after {
+    box-sizing: border-box;
+}
+
 body {
     display: flex;
     flex-direction: column;
@@ -6,6 +28,9 @@ body {
     padding: 0;
     margin: 0;
     overflow: hidden;
+    background-color: var(--color-bg);
+    font-family: sans-serif;
+    color: var(--color-text);
 }
 
 /* Page Header */
@@ -14,9 +39,9 @@ body {
     align-items: center;
     gap: 20px;
     padding: 10px 20px;
-    background-color: #2a2a2a;
+    background-color: var(--color-header-page);
     flex-shrink: 0;
-    border-bottom: 2px solid #000;
+    border-bottom: 2px solid var(--color-border);
 }
 
 #workspace-header h1 {
@@ -32,41 +57,37 @@ body {
 }
 
 #save-status {
-    color: gray;
+    color: var(--color-text-muted);
     font-size: 0.88em;
-    font-family: 'Roboto', sans-serif;
     min-width: 150px;
 }
 
 
-/* Button styling, keeping here and in style.css so workspace is independent of other css */
-
+/* Button styling */
 button {
-    background-color: rgb(65, 137, 56);
-    color: rgb(0, 0, 0);
+    background-color: var(--color-green);
+    color: var(--color-button-text);
     padding: 10px 20px;
     cursor: pointer;
-    transition: background-color 200ms ease, font-weight 200ms ease;
+    transition: background-color var(--transition-fast), font-weight var(--transition-fast);
+}
+button:disabled {
+    background-color: var(--color-disabled);
+    cursor: default;
 }
 button:hover:not(:disabled) {
-    background-color: rgb(46, 198, 79);
+    background-color: var(--color-green-hover);
     text-decoration: underline;
     font-weight: 500;
 }
 
-button:disabled {
-    background-color: rgb(120, 120, 120);
-    /* color: rgb(200, 200, 200); */
-    cursor: default;
-}
 
 
-
-/* //Scrollable workspace area */
+/* Scrollable workspace area */
 #workspace-container {
     flex: 1;
     overflow: auto;
-    padding: 20px;
+    padding: 0;
 }
 
 
@@ -75,63 +96,90 @@ button:disabled {
 /* Table */
 #workspace-table {
     border-collapse: collapse;
-    width: max-content;
-    /* width: 100%; */
+    width: 100%;
+    table-layout: fixed;
 }
 
 /* Shared table styling */
 #workspace-table th,
 #workspace-table td {
-    border: 2px solid #000;
+    border: 2px solid var(--color-border);
     padding: 6px 10px;
-    color: #cccccc;
-    text-align: left;
+    color: var(--color-text);
     vertical-align: middle;
 }
 
+
 #workspace-table tr {
-    background-color: #333;
+    background-color: var(--color-row);
 }
 
 #workspace-table th {
-    background-color: #252525;
+    background-color: var(--color-header-table);
     font-weight: 600;
-    white-space: nowrap;
 }
 
 #workspace-table tbody tr {
-    transition: background-color 200ms ease;
+    transition: background-color var(--transition-fast);
 }
 
-#workspace-table tr:hover {
-    background-color: #555;
-    /* color: #ffffff; */
+#workspace-table tbody tr:hover {
+    background-color: var(--color-row-hover);
 }
 
-/* Track info cells */
-.track-title-cell,
-.track-album-cell,
-.track-artist-cell {
-    max-width: 300px; /* //TODO make columns resizable*/
+
+
+/* Index column - fixed width, doesn't wrap */
+/* FUTURE: widen if track count exceeds 1000 or 10k?*/
+.index-cell {
+    width: 40px;
+    max-width: 50px;
+    text-align: center;
+    white-space: nowrap;
+}
+
+/* Track info column — takes remaining space */
+.track-info-cell {
+    text-align: left;
+
+    min-width: 220px;
+    width: 220px;
+    overflow: hidden;
+}
+
+.track-name {
+    font-weight: 600;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
 }
-.track-title-cell {
-    color: #cccccc;
-    font-weight: bold;    
+
+.track-meta {
+    font-size: 0.85em;
+    color: var(--color-text-muted);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    margin-top: 2px;
 }
 
+.track-meta .sep {
+    margin: 0 4px;
+}
 
-/* Checkbox cells */
+/* Checkbox columns — fixed width */
 .checkbox-cell {
+    width: 100px;
     text-align: center;
-    min-width: 90px;
+    white-space: normal;
+    word-break: break-word;
+    overflow: hidden;
+    position: relative;
 }
 
 .checkbox-cell input[type="checkbox"] {
     width: 16px;
     height: 16px;
     cursor: pointer;
-    accent-color: rgb(65, 137, 56);
+    accent-color: var(--color-green);
 }

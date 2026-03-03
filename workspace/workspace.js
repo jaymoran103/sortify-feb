@@ -48,7 +48,7 @@ async function init() {
 
     console.log("Setting up workspace for playlists:", playlists.map(p => p.name));
 
-    renderWorkspace();
+    renderWorkspaceTable();
     setupEventListeners();
 }
 
@@ -67,101 +67,151 @@ function showSessionError(message) {
     `;
 }
 
-function renderWorkspace() {
+
+
+function renderWorkspaceTable(){
     renderTableHeader();
     renderTableBody();
 }
 
-function renderTableHeader() {
+//Render header for new table structure. Columns for index, track info, and one for each playlist.
+function renderTableHeader(){
+
     const thead = document.getElementById("table-header");
     thead.innerHTML = "";
-
     const row = document.createElement("tr");
 
-    //Create and append header cells for track title, artist, album
+    //Column for track indices
+    const indexTh = document.createElement("th");
+    indexTh.className = "index-cell";
+    indexTh.textContent = "#";
+    row.appendChild(indexTh);
+
+    //Column for track info (currently combined). might add toggleable columns later for more metadata
     const titleTh = document.createElement("th");
-    titleTh.textContent = "Title";
+    titleTh.className = "track-info-cell";
+    titleTh.textContent = "Track";
     row.appendChild(titleTh);
-
-    const artistTh = document.createElement("th");
-    artistTh.textContent = "Artist";
-    row.appendChild(artistTh);
-
-    const albumTh = document.createElement("th");
-    albumTh.textContent = "Album";
-    row.appendChild(albumTh);
-
 
     // One column per playlist
     for (const playlist of playlists) {
         const th = document.createElement("th");
+        th.className = "checkbox-cell";
         th.textContent = playlist.name;
         th.dataset.playlistID = playlist.playlistID; // store playlist ID for reference
         row.appendChild(th);
     }
 
+    //Append to header
     thead.appendChild(row);
 }
 
-function renderTableBody() {
-
-    //Wipe existing table body
+//Render new table body. 
+function renderTableBody(){
+    //Wipe existing table body in case of re-render
     const tbody = document.getElementById("table-body");
     tbody.innerHTML = "";
 
-    // Collect unique track IDs across all playlists (preserving first-seen order.)//FUTURE: consider cases with duplicates within a playlist, should be fine to reduce to one.
+    const allTrackIDs = collectTrackIDsInOrder(playlists);
+
+
+    //Iterate through trackIDs in order, creating rows with track info and checkboxes for playlist membership.
+    for (let i = 0; i < allTrackIDs.length; i++) {
+        const trackID = allTrackIDs[i];
+        const row = document.createElement("tr");
+
+        //Index cell
+        const indexCell = document.createElement("td");
+        indexCell.className = "index-cell";
+        indexCell.textContent = i + 1; // Start at 1 not 0.
+        row.appendChild(indexCell);
+
+        //Info cell
+        const infoCell = createTrackInfoCell(trackID);
+        infoCell.className = "track-info-cell";
+        row.appendChild(infoCell);
+
+        //Create checkbox cells for each playlist, and append to row.
+        const membershipCells = createCheckboxCells(trackID);
+        membershipCells.forEach(cell => row.appendChild(cell));
+
+        //Append completed row to table body
+        tbody.appendChild(row);
+    }
+}
+
+//Helper method creates track info cell with title, artist, and album. FUTURE: Consider adding album art, but probably never worth it with API rate limits.
+// If info somehow isn't available, fields fall back to placeholders. This should be hard to encounter since importer currently rejects tracks missing basic metadata.
+function createTrackInfoCell(trackID){
+    const track = tracks[trackID];
+    const cell = document.createElement("td");
+
+    //Track title sits on top in its own div.
+    const trackNameDiv = document.createElement("div");
+    trackNameDiv.className = "track-name";
+    trackNameDiv.textContent = track ? track.title : trackID;
+    cell.appendChild(trackNameDiv);
+
+    //Other metadata (artist and album) sits in separate div below, with a separateor dot between. FUTURE: think about making these links to spotify IDs or something, opening in window or elsewhere. Since data currently comes through a third party, this would be a roundabout process to acquire for now.
+    const trackMetaDiv = document.createElement("div");
+    trackMetaDiv.className = "track-meta";
+
+    const artistSpan = document.createElement("span");
+    artistSpan.className = "artist";
+    artistSpan.textContent = track ? track.artist : "Unknown Artist";
+    trackMetaDiv.appendChild(artistSpan);
+
+    const sepSpan = document.createElement("span");
+    sepSpan.className = "sep";
+    sepSpan.textContent = " • ";
+    trackMetaDiv.appendChild(sepSpan);
+
+    const albumSpan = document.createElement("span");
+    albumSpan.className = "album";
+    albumSpan.textContent = track ? track.album : "Unknown Album";
+    trackMetaDiv.appendChild(albumSpan);
+
+    cell.appendChild(trackMetaDiv);
+    return cell;
+}
+
+//Helper method creates a checkbox cell for each displayed playlist, indicating and toggling the membership of the given trackID.
+function createCheckboxCells(trackID){
+    return playlists.map(playlist => {
+    
+        //Create cell and checkbox. FUTURE: Make checkbox bigger or whole cell clickable for easier toggling.
+        const checkCell = document.createElement("td");
+        checkCell.className = "checkbox-cell";
+        const checkbox = document.createElement("input");
+        checkbox.type = "checkbox";
+
+        //Store trackID and playlistID in dataset, so handler can reference them when toggled.
+        checkbox.dataset.trackID = trackID;
+        checkbox.dataset.playlistID = playlist.playlistID;
+
+        //Determine checked status by checking trackID against playlist's trackIDSet.
+        checkbox.checked = playlist.trackIDSet.has(trackID);
+        checkCell.appendChild(checkbox);
+        return checkCell;
+    });
+}
+
+// Helper method collects and returns an array of all unique track IDs across playlists in first-seen order, used for rendering rows.
+// NOTE: Duplicates are reduced to the first occurence, not a concern as displaying multiple would look messy and open the door to some wack uses.
+function collectTrackIDsInOrder(playlists){
     const seen = new Set();
-    const allTrackIDs = [];//FUTURE determine order of playlists checked by user input or order added
+    const allTrackIDs = [];
+    //Iterate through playlists in order, pushing not yet seen trackIDs to the array.
     for (const playlist of playlists) {
         for (const tid of playlist.trackIDs) {
+            //If not seen yet, add to seen and push to allTrackIDs. Specific playlist membership is determined later by checkboxes.
             if (!seen.has(tid)) {
                 seen.add(tid);
                 allTrackIDs.push(tid);
             }
         }
     }
-
-    console.log(`Attempting to render table with ${allTrackIDs.length} unique track IDs across ${playlists.length} playlists`);
-
-    // For each track ID, create a row with track info and checkboxes for playlist membership
-    for (const trackID of allTrackIDs) {
-        const track = tracks[trackID];
-        const row = document.createElement("tr");
-
-        // Create and append track info cells //FUTURE consider making a single cell or joining cells as container. 
-                                              // OR have a basic cell (just title+artist) and optional extra columns for album, duration, other metadata. Availabikity of album cover determines a lot, but rate limiiting might veto that for now.
-        const titleCell = document.createElement("td");
-        titleCell.className = "track-title-cell";
-        titleCell.textContent = track ? track.title : trackID;
-        row.appendChild(titleCell);
-
-        const artistCell = document.createElement("td");
-        artistCell.className = "track-artist-cell";
-        artistCell.textContent = track ? track.artist : "Unknown Artist";
-        row.appendChild(artistCell);
-        
-        const albumCell = document.createElement("td");
-        albumCell.className = "track-album-cell";
-        albumCell.textContent = track ? track.album : "Unknown Album";
-        row.appendChild(albumCell);
-
-        // For each playlist, add a checkbox representing memberbship
-        for (const playlist of playlists) {
-            const checkCell = document.createElement("td");
-            checkCell.className = "checkbox-cell";
-
-            const checkbox = document.createElement("input");
-            checkbox.type = "checkbox";
-            checkbox.dataset.trackID = trackID;
-            checkbox.dataset.playlistID = playlist.playlistID;
-            checkbox.checked = playlist.trackIDSet.has(trackID);
-
-            checkCell.appendChild(checkbox);
-            row.appendChild(checkCell);
-        }
-
-        tbody.appendChild(row);
-    }
+    return allTrackIDs;
 }
 
 function setupEventListeners() {
@@ -178,6 +228,7 @@ function setupEventListeners() {
     });
 
 }
+
 // Handler for checkbox click event. State manipulation now happns in session counterpart.
 function handleCheckboxToggle(checkbox) {
     console.log(`Checkbox toggled: trackID=${checkbox.dataset.trackID} playlistID=${checkbox.dataset.playlistID} checked=${checkbox.checked}`);
