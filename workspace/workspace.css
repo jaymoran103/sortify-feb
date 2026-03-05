@@ -5,6 +5,7 @@
     --color-header-table:#222;
     --color-row:         #333;
     --color-row-hover:   #444;
+    --color-checkbox-row-hover: #7f9181;
     --color-border:      #000;
     --color-text:        #ccc;
     --color-text-muted:  #888;
@@ -14,7 +15,9 @@
     --color-green-hover: rgb(46, 198, 79);
     --color-disabled:    rgb(120, 120, 120);
 
-    --transition-fast: 200ms ease;
+    --transition-fast: 150ms ease;
+
+    --standard-border: 2px solid var(--color-border);
 }
 
 *, *::before, *::after {
@@ -30,6 +33,7 @@ body {
     overflow: hidden;
     background-color: var(--color-bg);
     font-family: sans-serif;
+
     color: var(--color-text);
 }
 
@@ -41,7 +45,8 @@ body {
     padding: 10px 20px;
     background-color: var(--color-header-page);
     flex-shrink: 0;
-    border-bottom: 2px solid var(--color-border);
+    border-bottom: var(--standard-border);
+
 }
 
 #workspace-header h1 {
@@ -83,6 +88,71 @@ button:hover:not(:disabled) {
 
 
 
+/* Control bar */
+#control-bar {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 8px 16px;
+    background-color: var(--color-header-page);
+    border-bottom: var(--standard-border);
+    flex-shrink: 0;
+}
+
+/* Sort Controls */
+
+#sort-controls {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+#sort-controls label {
+    font-size: 0.8em;
+    color: var(--color-text-muted);
+}
+
+.sort-select-wrapper {
+    position: relative;
+    display: inline-block;
+}
+
+#sort-controls select {
+    background-color: var(--color-row);
+    color: var(--color-text);
+    border: var(--standard-border);
+    padding: 4px 8px;
+    cursor: pointer;
+    font-family: sans-serif;
+    font-size: 0.8em;
+    border-radius: 2px;
+    /* Override default appearance */
+    appearance: none;
+    padding-right: 25px;
+}
+
+.sort-select-wrapper {
+    position: relative;
+    display: inline-block;
+}
+
+/* Dropdown arrow */
+.sort-select-wrapper::after {
+    content: '';
+    position: absolute;
+    right: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 0;
+    height: 0;
+    border-left: 5px solid transparent;
+    border-right: 5px solid transparent;
+    border-top: 6px solid var(--color-text-muted);
+    /* pointer-events: none; let clicks pass through to the select. needed? */
+}
+
+
+
 /* Scrollable workspace area */
 #workspace-container {
     flex: 1;
@@ -103,7 +173,7 @@ button:hover:not(:disabled) {
 /* Shared table styling */
 #workspace-table th,
 #workspace-table td {
-    border: 2px solid var(--color-border);
+    border: var(--standard-border);
     padding: 6px 10px;
     color: var(--color-text);
     vertical-align: middle;
@@ -117,6 +187,12 @@ button:hover:not(:disabled) {
 #workspace-table th {
     background-color: var(--color-header-table);
     font-weight: 600;
+    position: sticky;
+    top: -1px;
+    z-index: 1;
+    border-top: none;
+    border-bottom: none;
+    box-shadow: inset 0 -2px 0 var(--color-border);
 }
 
 #workspace-table tbody tr {
@@ -127,13 +203,11 @@ button:hover:not(:disabled) {
     background-color: var(--color-row-hover);
 }
 
-
-
 /* Index column - fixed width, doesn't wrap */
 /* FUTURE: widen if track count exceeds 1000 or 10k?*/
 .index-cell {
-    width: 40px;
-    max-width: 50px;
+    width: 35px;
+    max-width: 40px;
     text-align: center;
     white-space: nowrap;
 }
@@ -169,6 +243,7 @@ button:hover:not(:disabled) {
 
 /* Checkbox columns — fixed width */
 .checkbox-cell {
+    font-size: 0.85em;
     width: 100px;
     text-align: center;
     white-space: normal;
@@ -182,4 +257,10 @@ button:hover:not(:disabled) {
     height: 16px;
     cursor: pointer;
     accent-color: var(--color-green);
+}
+/* Hover applies to body now, FUTURE - Review more thoroughly once playlist headers have their own click/hover interactions*/
+tbody .checkbox-cell:hover {
+    background-color: var(--color-checkbox-row-hover);
+    transition: background-color var(--transition-fast);
+    cursor: pointer;
 }

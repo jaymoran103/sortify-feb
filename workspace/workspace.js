@@ -3,9 +3,14 @@ import WorkspaceSession from "./session.js";
 const session = new WorkspaceSession();
 // Session state: primarily managed by WorkspaceSession. module-level vars set to live references inside session after load().
 // Render functions read these directly, so pointing them at session's arrays keeps everything in sync without a second copy of the data.
-let playlists = [];        // array of playlist objects: session.playlists after init
-let tracks = {};           // lookup object: session.tracks after init
-let modifiedPlaylists = new Set(); // same Set object of playlist IDs: session.modifiedPlaylists after init
+
+// Main data structures for workspace. Set to reference session's live data after loading
+let playlists = [];                // Sequential array of playlist objects, augmented with session-layer fields after loading.
+let tracks = {};                   // Lookup object mapping trackID to track data.
+let modifiedPlaylists = new Set(); // Set of 'dirty' playlist IDs to save.
+
+// Display Variables
+let currentSort = "default"; // Sort state for table rendering
 
 async function init() {
 
@@ -41,20 +46,22 @@ async function init() {
         return;
     }
 
-    // Point module vars at session's live data structures. Since they're references to the same objects/arrays, mutations like toggling tracks should be immediately reflected across the board without needing to reassign or sync.
+    // Point module vars at session's live data structures. Should stay in sync as session manipulates them.
     playlists = session.playlists;
     tracks = session.tracks;
-    modifiedPlaylists = session.modifiedPlaylists; // same Set object- always in sync
+    modifiedPlaylists = session.modifiedPlaylists;
 
+    // Render workspace, initialize controls. //FUTURE: When workspace is mostly complete, ensure order of ops makes sense.
     console.log("Setting up workspace for playlists:", playlists.map(p => p.name));
-
     renderWorkspaceTable();
+    initSortControl();
     setupEventListeners();
 }
 
 // Display an error message with a link back to the dashboard, used when session loading fails or no valid playlists are found.
 function showSessionError(message) {
     const container = document.getElementById("workspace-container");
+    //TODO extract this to html file and just inject message?
     container.innerHTML = `
         <div style="padding: 40px; text-align: center; color: #ccc;">
             <p style="font-size: 1.1em; color: red;">
@@ -66,7 +73,6 @@ function showSessionError(message) {
         </div>
     `;
 }
-
 
 
 function renderWorkspaceTable(){
@@ -90,7 +96,7 @@ function renderTableHeader(){
     //Column for track info (currently combined). might add toggleable columns later for more metadata
     const titleTh = document.createElement("th");
     titleTh.className = "track-info-cell";
-    titleTh.textContent = "Track";
+    titleTh.textContent = "TRACK";
     row.appendChild(titleTh);
 
     // One column per playlist
@@ -106,13 +112,17 @@ function renderTableHeader(){
     thead.appendChild(row);
 }
 
-//Render new table body. 
+//Render new table body. Called during init (-> renderWorkspaceTable) and on sort changes. 
+// Clears existing body, then rebuilds rows based on current playlist data and sort order.
 function renderTableBody(){
     //Wipe existing table body in case of re-render
     const tbody = document.getElementById("table-body");
     tbody.innerHTML = "";
 
-    const allTrackIDs = collectTrackIDsInOrder(playlists);
+    // Currently determines first-seen order, then applies sort, which gives us deterministic sort results.
+    // TODO: Store order somewhere so we don't have to recollect every time sort changes? Not a big deal at current scale.
+    // FUTURE: enable stable sort chaining by feeding sort method the current sort order instead of re-collecting. "First-seen" could be a distinct sort option that would trump any prior sorts. Holding off for UX simplicity for now.
+    const allTrackIDs = sortTrackIDs(collectTrackIDsInOrder(playlists), currentSort);
 
 
     //Iterate through trackIDs in order, creating rows with track info and checkboxes for playlist membership.
@@ -196,6 +206,69 @@ function createCheckboxCells(trackID){
     });
 }
 
+// Helper method to sort trackIDs based on given criteria. 
+// FUTURE: Missing fields currently sort to top, consider putting them at bottom for inessential metadata like BPM or genre info
+// FUTURE: Make sort output more intuitive by stripping non A-Z characters and ignoring case. Similarly strip " the" from names?
+function sortTrackIDs(trackIDs, criteria) {
+    //Return as-is for default
+    if (criteria === "default") return trackIDs;//Is default even the name we want? 'First-seen' is a bit technical but 'default' is vague
+
+    //Return an array copy, using localeCompare to sort based on the specified field.
+    const field = criteria;// Enforce that criteria matches one of [Title, Artist, Album]?
+    return [...trackIDs].sort((a, b) => {
+        const trackA = tracks[a];
+        const trackB = tracks[b];
+        const valA = trackA ? (trackA[field] || "") : "";
+        const valB = trackB ? (trackB[field] || "") : "";
+        return valA.localeCompare(valB);
+    });
+}
+
+// Build and inject the sort dropdown into #sort-controls. Called once in init()
+//FUTURE: Extract methods like this to a separate UI component?
+function initSortControl() {
+    const container = document.getElementById("sort-controls");
+    
+    //Wrapper for label and sort dropdown, facilitates dropdown styling
+    const wrapper = document.createElement("div");
+    wrapper.className = "sort-select-wrapper";
+
+    //Label for sort dropdown
+    const label = document.createElement("label");
+    label.textContent = "Sort by:";
+    label.htmlFor = "sort-select";
+
+    //Actual select element
+    const select = document.createElement("select");
+    select.id = "sort-select";
+
+    // Define options for sorting, then create and append option elements to the select.
+    //FUTURE: add fields dynamically based on available metadata in later versions?
+    const options = [
+        // { value: "default", label: "Default order" },
+        { value: "default", label: "Default" },
+        { value: "title",   label: "Title" },
+        { value: "artist",  label: "Artist" },
+        { value: "album",   label: "Album" },
+    ];
+    for (const opt of options) {
+        const optionElement = document.createElement("option");
+        optionElement.value = opt.value;
+        optionElement.textContent = opt.label;
+        select.appendChild(optionElement);
+    }
+
+    //On selector change, update currentSort and re-render table body.
+    select.addEventListener("change", () => {
+        currentSort = select.value;
+        renderTableBody();
+    });
+
+    wrapper.appendChild(select);
+    container.appendChild(label);
+    container.appendChild(wrapper);
+}
+
 // Helper method collects and returns an array of all unique track IDs across playlists in first-seen order, used for rendering rows.
 // NOTE: Duplicates are reduced to the first occurence, not a concern as displaying multiple would look messy and open the door to some wack uses.
 function collectTrackIDsInOrder(playlists){
@@ -214,16 +287,31 @@ function collectTrackIDsInOrder(playlists){
     return allTrackIDs;
 }
 
+// Set up event listeners for checkboxes and buttons. Called once in init()
 function setupEventListeners() {
 
+    //Basic button listeners for save and back.
     document.getElementById("save-btn").addEventListener("click", handleSave);
     document.getElementById("back-btn").addEventListener("click", () => {
         window.location.href = "..";//Redirect to dashboard/home page
     });
+
     // For any checkbox change in the table body, handle toggle with reference to the event target
     document.getElementById("table-body").addEventListener("change", (e) => {
         if (e.target.type === "checkbox") {
             handleCheckboxToggle(e.target);
+        }
+    });
+    
+    //Make all checkbox cells clickable by toggling the checkbox when the cell is clicked, (unless the click is directly on the checkbox)
+    //FUTURE consider using custom component or styling to make the entire cell function as a checkbox, rather than this workaround.
+    document.getElementById("table-body").addEventListener("click", (e) => {
+        const cell = e.target.closest(".checkbox-cell");
+        if (cell && !e.target.matches("input[type='checkbox']")) {
+            const checkbox = cell.querySelector("input[type='checkbox']");
+            if (checkbox) {
+                checkbox.click(); // Trigger the checkbox's click event, which will handle the toggle logic.
+            }
         }
     });
 

@@ -2,11 +2,14 @@
     <head>
         <meta charset="utf-8">
         <title>Playlist Workspace</title>
-        <!-- <link rel="stylesheet" href="style.css"> -->
-        <link rel="stylesheet" href="workspace.css">
+        <!-- Standalone styling, no dependencies for now.
+         Will extract styling to root once workspace is fleshed out -->
 
+        <link rel="stylesheet" href="workspace.css">
     </head>
     <body>
+
+        <!-- Header with title, navigation and save controls -->
         <header id="workspace-header">
             <h1>Playlist Workspace</h1>
             <button id="back-btn">Back to Dashboard</button>
@@ -18,6 +21,14 @@
             </div>
         </header>
 
+        <!-- Control bar facilitating table manipulation -->
+        <div id="control-bar">
+            <div id="sort-controls"></div>
+            <!-- <div id="search-controls"></div> -->
+            <!-- <div id="playlist-controls"></div> -->
+        </div>
+
+        <!-- Main workspace area -->
         <main id="workspace-container">
             <table id="workspace-table">
                 <thead id="table-header"></thead>
