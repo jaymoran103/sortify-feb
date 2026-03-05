@@ -11,6 +11,8 @@ let modifiedPlaylists = new Set(); // Set of 'dirty' playlist IDs to save.
 
 // Display Variables
 let currentSort = "default"; // Sort state for table rendering
+let currentFilter = "";      // lowercased search query, modified by search input event listener. Empty string means no filter
+
 
 async function init() {
 
@@ -55,13 +57,14 @@ async function init() {
     console.log("Setting up workspace for playlists:", playlists.map(p => p.name));
     renderWorkspaceTable();
     initSortControl();
+    initSearchControl();
     setupEventListeners();
 }
 
 // Display an error message with a link back to the dashboard, used when session loading fails or no valid playlists are found.
 function showSessionError(message) {
     const container = document.getElementById("workspace-container");
-    //TODO extract this to html file and just inject message?
+    //FUTURE extract this to html file and just inject message?
     container.innerHTML = `
         <div style="padding: 40px; text-align: center; color: #ccc;">
             <p style="font-size: 1.1em; color: red;">
@@ -73,7 +76,6 @@ function showSessionError(message) {
         </div>
     `;
 }
-
 
 function renderWorkspaceTable(){
     renderTableHeader();
@@ -119,15 +121,38 @@ function renderTableBody(){
     const tbody = document.getElementById("table-body");
     tbody.innerHTML = "";
 
-    // Currently determines first-seen order, then applies sort, which gives us deterministic sort results.
+
+    // Section determines first-seen order, then applies sort, then filters.
+    // TODO: Why not filter before sorting? seems like it would be more efficient to reduce number of items to sort. 
+
+    // NOTE: Adhering to first-seen order means search results are deterministic for each option, rather than implictly reflecting prior sorts.
     // TODO: Store order somewhere so we don't have to recollect every time sort changes? Not a big deal at current scale.
     // FUTURE: enable stable sort chaining by feeding sort method the current sort order instead of re-collecting. "First-seen" could be a distinct sort option that would trump any prior sorts. Holding off for UX simplicity for now.
-    const allTrackIDs = sortTrackIDs(collectTrackIDsInOrder(playlists), currentSort);
+    const trackIDsInOrder = collectTrackIDsInOrder(playlists);
+    const sorted      = sortTrackIDs(trackIDsInOrder, currentSort);
+    const shownTrackIDs = filterTrackIDs(sorted, currentFilter);
 
+    // If no tracks to show, display message indicating this.
+    // FUTURE: could be more specific about "no tracks in this playlist" vs "no tracks match search query"
+    // FUTURE: Extract styling for this display somewhere?
+    if (shownTrackIDs.length === 0) {
+        const emptyRow = document.createElement("tr");
+        const emptyCell = document.createElement("td");
+        emptyCell.colSpan = 2 + playlists.length; // index + track info + one per playlist
+        emptyCell.style.textAlign = "center";
+        emptyCell.style.color = "var(--color-text-muted)";
+        emptyCell.style.padding = "24px";
+        emptyCell.textContent = currentFilter
+            ? `No tracks match "${currentFilter}"`
+            : "No tracks to display";
+        emptyRow.appendChild(emptyCell);
+        tbody.appendChild(emptyRow);
+        return;
+    }
 
-    //Iterate through trackIDs in order, creating rows with track info and checkboxes for playlist membership.
-    for (let i = 0; i < allTrackIDs.length; i++) {
-        const trackID = allTrackIDs[i];
+    //If shown tracks exist, iterate through trackIDs in order, creating rows with track info and checkboxes for playlist membership.
+    for (let i = 0; i < shownTrackIDs.length; i++) {
+        const trackID = shownTrackIDs[i];
         const row = document.createElement("tr");
 
         //Index cell
@@ -206,7 +231,7 @@ function createCheckboxCells(trackID){
     });
 }
 
-// Helper method to sort trackIDs based on given criteria. 
+// Main Sort Method: returns sorted array of trackIDs based on given criteria. 
 // FUTURE: Missing fields currently sort to top, consider putting them at bottom for inessential metadata like BPM or genre info
 // FUTURE: Make sort output more intuitive by stripping non A-Z characters and ignoring case. Similarly strip " the" from names?
 function sortTrackIDs(trackIDs, criteria) {
@@ -223,9 +248,54 @@ function sortTrackIDs(trackIDs, criteria) {
         return valA.localeCompare(valB);
     });
 }
+// Main Filter Method: Returns filtered array of trackIDs based on search query. 
+// Checks if query (case insensitive) is included in title, artist, or album fields.
+// Pure filter transform — returns a new filtered array, never mutates input.
+// Query is lowercased on assignment (initSearchControl), not on each call.
+function filterTrackIDs(trackIDs, query) {
+    // If no query (empty or whitespace-only), return original array unfiltered.
+    if (!query) return trackIDs;
+
+    //Otherwise, return a new array of IDs where query is included in the title, artist, or album fields of the corresponding track.
+    return trackIDs.filter(id => {
+        const track = tracks[id];
+        if (!track) return false;
+        return (
+            (track.title  || "").toLowerCase().includes(query) ||
+            (track.artist || "").toLowerCase().includes(query) ||
+            (track.album  || "").toLowerCase().includes(query)
+        );
+    });
+}
+
+// Build and inject the search input into #search-controls. Called once in init()
+// FUTURE: Extract methods like this to a separate UI component?
+function initSearchControl() {
+    const container = document.getElementById("search-controls");
+
+    // Search input with placeholder message
+    const input = document.createElement("input");
+    input.type = "search";
+    input.id = "search-input";
+    input.placeholder = "Search tracks...";
+
+    // Debounce: wait 200ms to re-render after last update keystroke before re-rendering.
+    // FUTURE: Consider performance impact for big libraries. Not a concern at current scale.
+    let debounceTimer;
+    input.addEventListener("input", () => {
+        clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(() => {
+            currentFilter = input.value.trim().toLowerCase();
+            // FUTURE: once pagination is added, probably need to reset to page 1 here, since filter could change total pages and current page might end up out of range. 
+            renderTableBody(); //All we need for now
+        }, 200);
+    });
+
+    container.appendChild(input);
+}
 
 // Build and inject the sort dropdown into #sort-controls. Called once in init()
-//FUTURE: Extract methods like this to a separate UI component?
+// FUTURE: Extract methods like this to a separate UI component?
 function initSortControl() {
     const container = document.getElementById("sort-controls");
     
@@ -295,7 +365,6 @@ function setupEventListeners() {
     document.getElementById("back-btn").addEventListener("click", () => {
         window.location.href = "..";//Redirect to dashboard/home page
     });
-
     // For any checkbox change in the table body, handle toggle with reference to the event target
     document.getElementById("table-body").addEventListener("change", (e) => {
         if (e.target.type === "checkbox") {

@@ -1,5 +1,6 @@
 /* Shared styling */
 :root {
+    /* Colors */
     --color-bg:          #212121;
     --color-header-page: #222;
     --color-header-table:#222;
@@ -15,9 +16,16 @@
     --color-green-hover: rgb(46, 198, 79);
     --color-disabled:    rgb(120, 120, 120);
 
-    --transition-fast: 150ms ease;
+    /* Fonts */
+    --font-family: sans-serif;
+    --font-size-base: 1em;
+    --font-size-controls: 0.9em;
+    --font-size-metadata: 0.9em;
 
+    /* Other */
+    --transition-fast: 150ms ease;
     --standard-border: 2px solid var(--color-border);
+
 }
 
 *, *::before, *::after {
@@ -32,7 +40,7 @@ body {
     margin: 0;
     overflow: hidden;
     background-color: var(--color-bg);
-    font-family: sans-serif;
+    font-family: var(--font-family);
 
     color: var(--color-text);
 }
@@ -53,18 +61,6 @@ body {
     flex: 1;
     margin: 0;
     font-size: 1.3rem;
-}
-
-#save-controls {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-}
-
-#save-status {
-    color: var(--color-text-muted);
-    font-size: 0.88em;
-    min-width: 150px;
 }
 
 
@@ -91,12 +87,18 @@ button:hover:not(:disabled) {
 /* Control bar */
 #control-bar {
     display: flex;
-    align-items: center;
+    /* align-items: center; */
     gap: 16px;
     padding: 8px 16px;
     background-color: var(--color-header-page);
     border-bottom: var(--standard-border);
     flex-shrink: 0;
+}
+
+/* Common height for controls */
+#sort-controls select,
+#search-controls input[type="search"] {
+    height: 32px;
 }
 
 /* Sort Controls */
@@ -108,7 +110,7 @@ button:hover:not(:disabled) {
 }
 
 #sort-controls label {
-    font-size: 0.8em;
+    font-size: var(--font-size-controls);
     color: var(--color-text-muted);
 }
 
@@ -123,8 +125,8 @@ button:hover:not(:disabled) {
     border: var(--standard-border);
     padding: 4px 8px;
     cursor: pointer;
-    font-family: sans-serif;
-    font-size: 0.8em;
+    font-family: var(--font-family);
+    font-size: var(--font-size-controls);
     border-radius: 2px;
     /* Override default appearance */
     appearance: none;
@@ -136,7 +138,7 @@ button:hover:not(:disabled) {
     display: inline-block;
 }
 
-/* Dropdown arrow */
+/* Sort Dropdown arrow */
 .sort-select-wrapper::after {
     content: '';
     position: absolute;
@@ -150,6 +152,43 @@ button:hover:not(:disabled) {
     border-top: 6px solid var(--color-text-muted);
     /* pointer-events: none; let clicks pass through to the select. needed? */
 }
+
+/* Search Controls */
+#search-controls {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    /* margin-left: auto; */
+}
+
+#search-controls input[type="search"] {
+    background-color: var(--color-row);
+    color: var(--color-text);
+    border: var(--standard-border);
+    padding: 4px 8px;
+    width: 220px;
+    font-family: var(--font-family);
+    font-size: var(--font-size-controls);
+}
+#search-controls input[type="search"]::placeholder {
+    color: var(--color-text-muted);
+}
+
+/* Save Controls */
+#save-controls {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-left: auto;
+}
+
+#save-status {
+    color: var(--color-text-muted);
+    font-size: var(--font-size-controls);
+    width: 190px;
+    text-align: right;
+}
+
 
 
 
@@ -223,13 +262,18 @@ button:hover:not(:disabled) {
 
 .track-name {
     font-weight: 600;
+    font-family: var(--font-family);
+    font-size: var(--font-size-base);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
 }
 
+
 .track-meta {
-    font-size: 0.85em;
+    /* TODO: Differentiate styling for artist vs album?*/
+    font-family: var(--font-family);
+    font-size: var(--font-size-metadata);
     color: var(--color-text-muted);
     overflow: hidden;
     text-overflow: ellipsis;
@@ -243,7 +287,7 @@ button:hover:not(:disabled) {
 
 /* Checkbox columns — fixed width */
 .checkbox-cell {
-    font-size: 0.85em;
+    font-size: var(--font-size-base);
     width: 100px;
     text-align: center;
     white-space: normal;
