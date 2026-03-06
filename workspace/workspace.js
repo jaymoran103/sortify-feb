@@ -47,7 +47,8 @@ async function init() {
     console.log(`Restoring session (created ${savedSession.timestamp}).`,
         "Playlist IDs:", savedSession.playlistIds);
 
-    showProgressBar();
+    await showProgressBar(); //Show load bar. (hidden in catch, empty playlists case, and method end).
+
     try {
         await session.load(savedSession.playlistIds);
     } catch (err) {
@@ -69,17 +70,19 @@ async function init() {
     tracks = session.tracks;
     modifiedPlaylists = session.modifiedPlaylists;
 
-    // Render workspace, initialize controls. //FUTURE: When workspace is mostly complete, ensure order of ops makes sense.
+    // Instantiate workspace controls
     console.log("Setting up workspace for playlists:", playlists.map(p => p.name));
-    initScrollObserver();   // must be before first render so observer exists when sentinel enters view
+    initScrollObserver(); // must be before first render so observer exists when sentinel enters view
     initSortControl();
-    initSearchControl();
+    initSearchControl(); //TODO: Standardize these two names? I see search as the user control, filter as the operation.
     initFilterCounter();
-    setupEventListeners();
-    //Once display is mostly loaded, render the first batch and hide the progress bar. FUTURE: Consider showing some empty table element for visual consistency, populating once data is ready.
-    renderWorkspaceTable();
-    // await new Promise(r => setTimeout(r, 5000)); // DEBUG
 
+    // Once display is mostly loaded, ensure controls paint before continuing.
+    await yieldForPaint();/// FUTURE: Consider showing some empty table element for visual consistency, populating once data is ready.
+
+    //Continue workspace setup: event listeners, render workspace, and  hide progress bar.
+    setupEventListeners();
+    renderWorkspaceTable();
     hideProgressBar();
 }
 
@@ -100,14 +103,20 @@ function showSessionError(message) {
 }
 
 // Show and hide the progress bar during async loading operations.
-function showProgressBar() {
+async function showProgressBar() {
     document.getElementById("progress-bar").classList.add("loading");
+    await yieldForPaint(); // Ensure the progress bar is visible before continuing with loading.
 }
 function hideProgressBar() {
     document.getElementById("progress-bar").classList.remove("loading");
 }
 
-function renderWorkspaceTable(){
+// Returns promise that resolves on next paint, allowing UI updates to render before continuing with time-consuming operations.
+async function yieldForPaint(){
+    await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+}
+
+function renderWorkspaceTable() {
     renderTableHeader();
     renderTableBody();
 }
@@ -156,7 +165,7 @@ function renderTableBody(){
     // Recompute displaylist from cached order of trackIDs, applying filter and sort. 
     // Uses cached first-seen order: recomputes only when cache is reset (by handleCheckboxToggle) 
     // FUTURE: cache further, remembering results of most recent filter or sort? Not a concern now, membership is the only operation that scales with playist size
-    const trackIDsInOrder = cachedTrackIDsOrder || collectTrackIDsInOrder(playlists);
+    const trackIDsInOrder = cachedTrackIDsOrder ??= collectTrackIDsInOrder(playlists); //get trackIDs, cache if not present
     const filteredIDs = filterTrackIDs(trackIDsInOrder, currentFilter);
     const sortedIDs = sortTrackIDs(filteredIDs, currentSort);
     displayList = sortedIDs;

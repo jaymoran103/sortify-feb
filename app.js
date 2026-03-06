@@ -173,9 +173,8 @@ class AppIteration2{
         //update label to indicate state on page, show progress bar
         const label = document.getElementById("file-count-label");
         label.textContent = "loading playlists...";
-        document.getElementById("progress-bar").classList.add("loading");
 
-        // await new Promise(r => setTimeout(r, 2000)); // DEBUG
+        await showProgressBar(); // Show loading indicator, hidden at method end.
 
         //Perform import 
         await this.importFiles(files);
@@ -187,7 +186,7 @@ class AppIteration2{
         //reset file input, label, and progress bar for next import
         document.getElementById("csvFileInput").value = "";
         document.getElementById("file-count-label").textContent = "";
-        document.getElementById("progress-bar").classList.remove("loading");
+        hideProgressBar();          
     }
 
     //Prompt user to select files, resolving with selection(s) once dialog closes.
@@ -290,7 +289,17 @@ class AppIteration2{
 
 
 
+
 }
+
+async function showProgressBar() {
+    document.getElementById("progress-bar").classList.add("loading");
+    await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r))); // yield so browser paints bar before load
+}
+function hideProgressBar() {
+    document.getElementById("progress-bar").classList.remove("loading");
+}
+
 
 const app = new AppIteration2();
 
