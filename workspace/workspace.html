@@ -15,10 +15,14 @@
             <button id="back-btn">Back to Dashboard</button>
         </header>
 
+        <!-- Progress bar for load operations -->
+        <div id="progress-bar"></div>
+
         <!-- Control bar facilitating table manipulation -->
         <div id="control-bar">
             <div id="sort-controls"></div>
             <div id="search-controls"></div>
+            <span id="filter-counter"></span>
             <div id="save-controls">
                 <span id="save-status"></span>
                 <button id="save-btn" disabled>Save</button>
@@ -32,6 +36,7 @@
                 <thead id="table-header"></thead>
                 <tbody id="table-body"></tbody>
             </table>
+            <div id="scroll-sentinel"></div>
         </main>
 
         <script type="module" src="workspace.js"></script>

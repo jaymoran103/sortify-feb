@@ -17,6 +17,7 @@
 
         <div id="import-container">
             <h2>Import Playlists</h2>
+            <div id="progress-bar"></div> <!-- FUTURE: Find more fitting indicator for this page once fleshed out -->
             <button id="importButton">Import</button>
             <input type="file" id="csvFileInput" accept=".csv" multiple hidden />
             <span id="file-count-label"></span>
@@ -28,9 +29,11 @@
             <button id="open-workspace-select-btn">Open Workspace (Select Playlists)</button>
             <div id="playlist-select-panel">
                 <strong>Select playlists to open in workspace:</strong>
-                <div id="playlist-select-list" style="margin: 8px 0;"></div>
+                <div></div> <!-- Leaving buttons above display list, in case many playlists are available. FUTURE: find better look-->
                 <button id="confirm-select-btn">Open in Workspace</button>
                 <button id="cancel-select-btn">Cancel</button>
+                <div id="playlist-select-list" style="margin: 8px 0;"></div>
+                
             </div>
         </div>
 

@@ -9,9 +9,22 @@ let playlists = [];                // Sequential array of playlist objects, augm
 let tracks = {};                   // Lookup object mapping trackID to track data.
 let modifiedPlaylists = new Set(); // Set of 'dirty' playlist IDs to save.
 
-// Display Variables
-let currentSort = "default"; // Sort state for table rendering
+// Display Variables: Filter + Sort
 let currentFilter = "";      // lowercased search query, modified by search input event listener. Empty string means no filter
+let currentSort = "default"; // Sort state for table rendering
+let cachedTrackIDsOrder = null; // Array of trackIDs in first-seen order. Recomputed lazily when playlist membership changes.
+// const SORT_STYLE = "deterministic" // "deterministic","chained"
+// let cachedLastSortOrder = null;
+
+// Lazy load state.
+const BATCH_SIZE = 100;   // Rows appended per scroll-triggered batch.
+let loadedCount  = 0;    // Tracks number of rows currently in the DOM for the active displayList.
+let displayList  = [];   // Full filtered+sorted ID list for current display state. Sliced by renderNextBatch().
+
+//TODO fix
+// DOM refs set once during init, used across render calls
+let filterCounterElement; // set by initFilterCounter(), 
+let scrollObserver;  // set by initScrollObserver()
 
 
 async function init() {
@@ -34,16 +47,19 @@ async function init() {
     console.log(`Restoring session (created ${savedSession.timestamp}).`,
         "Playlist IDs:", savedSession.playlistIds);
 
+    showProgressBar();
     try {
         await session.load(savedSession.playlistIds);
     } catch (err) {
         let message = "Failed to load playlists from IndexedDB:";
         console.error(message, err);
+        hideProgressBar();
         showSessionError(message+" " + err.message);
         return;
     }
 
     if (session.playlists.length === 0) {
+        hideProgressBar();
         showSessionError("No playlists were found for the selected IDs.");
         return;
     }
@@ -55,16 +71,22 @@ async function init() {
 
     // Render workspace, initialize controls. //FUTURE: When workspace is mostly complete, ensure order of ops makes sense.
     console.log("Setting up workspace for playlists:", playlists.map(p => p.name));
-    renderWorkspaceTable();
+    initScrollObserver();   // must be before first render so observer exists when sentinel enters view
     initSortControl();
     initSearchControl();
+    initFilterCounter();
     setupEventListeners();
+    //Once display is mostly loaded, render the first batch and hide the progress bar. FUTURE: Consider showing some empty table element for visual consistency, populating once data is ready.
+    renderWorkspaceTable();
+    // await new Promise(r => setTimeout(r, 5000)); // DEBUG
+
+    hideProgressBar();
 }
 
 // Display an error message with a link back to the dashboard, used when session loading fails or no valid playlists are found.
 function showSessionError(message) {
     const container = document.getElementById("workspace-container");
-    //FUTURE extract this to html file and just inject message?
+    //FUTURE extract this to html file and just inject message? OR workspace UI class
     container.innerHTML = `
         <div style="padding: 40px; text-align: center; color: #ccc;">
             <p style="font-size: 1.1em; color: red;">
@@ -77,12 +99,20 @@ function showSessionError(message) {
     `;
 }
 
+// Show and hide the progress bar during async loading operations.
+function showProgressBar() {
+    document.getElementById("progress-bar").classList.add("loading");
+}
+function hideProgressBar() {
+    document.getElementById("progress-bar").classList.remove("loading");
+}
+
 function renderWorkspaceTable(){
     renderTableHeader();
     renderTableBody();
 }
 
-//Render header for new table structure. Columns for index, track info, and one for each playlist.
+//Render header for table structure. Columns for index, track info, and one for each playlist.
 function renderTableHeader(){
 
     const thead = document.getElementById("table-header");
@@ -114,65 +144,104 @@ function renderTableHeader(){
     thead.appendChild(row);
 }
 
-//Render new table body. Called during init (-> renderWorkspaceTable) and on sort changes. 
-// Clears existing body, then rebuilds rows based on current playlist data and sort order.
+// Renders body of workspace table. 
+// Applies filter, then sort, to cachedTrackIDsOrder (recomputed when membership changes invalidate cache)
+// NOTE: Always call resetLoadedRows() before this when sort or filter changes. FUTURE: consider calling it here, or moving logic here, rather than relying on callers to use both?
 function renderTableBody(){
-    //Wipe existing table body in case of re-render
-    const tbody = document.getElementById("table-body");
-    tbody.innerHTML = "";
-
-
-    // Section determines first-seen order, then applies sort, then filters.
-    // TODO: Why not filter before sorting? seems like it would be more efficient to reduce number of items to sort. 
-
     // NOTE: Adhering to first-seen order means search results are deterministic for each option, rather than implictly reflecting prior sorts.
-    // TODO: Store order somewhere so we don't have to recollect every time sort changes? Not a big deal at current scale.
-    // FUTURE: enable stable sort chaining by feeding sort method the current sort order instead of re-collecting. "First-seen" could be a distinct sort option that would trump any prior sorts. Holding off for UX simplicity for now.
-    const trackIDsInOrder = collectTrackIDsInOrder(playlists);
-    const sorted      = sortTrackIDs(trackIDsInOrder, currentSort);
-    const shownTrackIDs = filterTrackIDs(sorted, currentFilter);
+    // FUTURE: enable stable sort chaining by feeding sort method the current sort order instead of re-collecting. 
+    //         "First-seen" could be a distinct sort option that would trump any prior sorts. Holding off for UX simplicity for now.
+    //         Logic should live in sortTrackIDs or a modified collectTrackIDsInOrder, though this is more complicated now that filter precedes sort. This seems like the better computational choice, so im not worried about bonus sort behavior right now.
+    
+    // Recompute displaylist from cached order of trackIDs, applying filter and sort. 
+    // Uses cached first-seen order: recomputes only when cache is reset (by handleCheckboxToggle) 
+    // FUTURE: cache further, remembering results of most recent filter or sort? Not a concern now, membership is the only operation that scales with playist size
+    const trackIDsInOrder = cachedTrackIDsOrder || collectTrackIDsInOrder(playlists);
+    const filteredIDs = filterTrackIDs(trackIDsInOrder, currentFilter);
+    const sortedIDs = sortTrackIDs(filteredIDs, currentSort);
+    displayList = sortedIDs;
 
     // If no tracks to show, display message indicating this.
-    // FUTURE: could be more specific about "no tracks in this playlist" vs "no tracks match search query"
-    // FUTURE: Extract styling for this display somewhere?
-    if (shownTrackIDs.length === 0) {
-        const emptyRow = document.createElement("tr");
-        const emptyCell = document.createElement("td");
-        emptyCell.colSpan = 2 + playlists.length; // index + track info + one per playlist
-        emptyCell.style.textAlign = "center";
-        emptyCell.style.color = "var(--color-text-muted)";
-        emptyCell.style.padding = "24px";
-        emptyCell.textContent = currentFilter
-            ? `No tracks match "${currentFilter}"`
-            : "No tracks to display";
-        emptyRow.appendChild(emptyCell);
-        tbody.appendChild(emptyRow);
+    if (displayList.length === 0) {
+        renderEmptyTableBody(filteredIDs.length);
         return;
     }
 
-    //If shown tracks exist, iterate through trackIDs in order, creating rows with track info and checkboxes for playlist membership.
-    for (let i = 0; i < shownTrackIDs.length; i++) {
-        const trackID = shownTrackIDs[i];
-        const row = document.createElement("tr");
+    // Otherwise, update filter counter and render first batch of results. Scroll sentinel and observer trigger future batches.
+    updateFilterCounter(displayList.length);
+    renderNextBatch();
+}
 
-        //Index cell
-        const indexCell = document.createElement("td");
-        indexCell.className = "index-cell";
-        indexCell.textContent = i + 1; // Start at 1 not 0.
-        row.appendChild(indexCell);
+// Renders a single row with a message indicating that there are no tracks to display.
+function renderEmptyTableBody(filteredCount){
+    const tbody = document.getElementById("table-body");
+    const emptyRow = document.createElement("tr");
+    const emptyCell = document.createElement("td");
+    
+    emptyCell.colSpan = 2 + playlists.length; // index + track info + one per playlist
+    emptyCell.style.textAlign = "center";
+    emptyCell.style.color = "var(--color-text-muted)";
+    emptyCell.style.padding = "24px";
 
-        //Info cell
-        const infoCell = createTrackInfoCell(trackID);
-        infoCell.className = "track-info-cell";
-        row.appendChild(infoCell);
+    //Message indicates whether empty state is due to filtering, or simply no tracks in the selected playlists.
+    emptyCell.textContent = (filteredCount === 0)
+        ? "No tracks in selected playlists"
+        : `No tracks match "${currentFilter}"`;
 
-        //Create checkbox cells for each playlist, and append to row.
-        const membershipCells = createCheckboxCells(trackID);
-        membershipCells.forEach(cell => row.appendChild(cell));
+    //Appent elements, update filter counter with 0 matches
+    emptyRow.appendChild(emptyCell);
+    tbody.appendChild(emptyRow);
+    updateFilterCounter(0);
+}
 
-        //Append completed row to table body
-        tbody.appendChild(row);
+// Clears rendered rows and resets lazy-load position. Call before renderTableBody() on sort/filter change.
+function resetLoadedRows() {
+    loadedCount = 0;
+    displayList = [];
+    document.getElementById("table-body").innerHTML = "";
+}
+
+// Appends the next BATCH_SIZE rows to the table body. Safe to call when all rows are already loaded.
+function renderNextBatch() {
+    // If all tracks are already loaded, do nothing.
+    if (loadedCount >= displayList.length) return;
+
+    // Otherwise, create rows for the next batch of tracks and append to the table body.
+    const tbody = document.getElementById("table-body");
+    const lastRow = Math.min(loadedCount + BATCH_SIZE, displayList.length);
+    const fragment = document.createDocumentFragment(); // batch DOM writes into one append
+
+    // For each row, create a track row and append to fragment.
+    for (let i = loadedCount; i < lastRow; i++) {
+        const trackID = displayList[i];
+        const row = createTrackRow(trackID, i+1);
+        fragment.appendChild(row);
     }
+
+    tbody.appendChild(fragment); // single reflow for the whole batch
+    loadedCount = lastRow;
+}
+
+// Helper method creates a display row for a given trackID.
+function createTrackRow(trackID, displayIndex){
+    const row = document.createElement("tr");
+
+    //Index cell. Expects 1-based displayIndex, rather than actual position in displayList.
+    const indexCell = document.createElement("td");
+    indexCell.className = "index-cell";
+    indexCell.textContent = displayIndex;
+    row.appendChild(indexCell);
+
+    //Info cell
+    const infoCell = createTrackInfoCell(trackID);
+    infoCell.className = "track-info-cell";
+    row.appendChild(infoCell);
+
+    //Create checkbox cells for each playlist, and append to row.
+    const membershipCells = createCheckboxCells(trackID);
+    membershipCells.forEach(cell => row.appendChild(cell));
+    
+    return row;
 }
 
 //Helper method creates track info cell with title, artist, and album. FUTURE: Consider adding album art, but probably never worth it with API rate limits.
@@ -286,8 +355,8 @@ function initSearchControl() {
         clearTimeout(debounceTimer);
         debounceTimer = setTimeout(() => {
             currentFilter = input.value.trim().toLowerCase();
-            // FUTURE: once pagination is added, probably need to reset to page 1 here, since filter could change total pages and current page might end up out of range. 
-            renderTableBody(); //All we need for now
+            resetLoadedRows(); // clear rows before re-rendering with new filter
+            renderTableBody();
         }, 200);
     });
 
@@ -328,15 +397,49 @@ function initSortControl() {
         select.appendChild(optionElement);
     }
 
-    //On selector change, update currentSort and re-render table body.
+    //On selector change, reset rows and re-render from the top.
     select.addEventListener("change", () => {
         currentSort = select.value;
+        resetLoadedRows();
         renderTableBody();
     });
 
     wrapper.appendChild(select);
     container.appendChild(label);
     container.appendChild(wrapper);
+}
+
+// Creates IntersectionObserver on #scroll-sentinel to trigger renderNextBatch() as user scrolls.
+function initScrollObserver() {
+    const container = document.getElementById("workspace-container"); // root must be #workspace-container, which has the scrollbar, for the observer to work correctly.
+    const sentinel  = document.getElementById("scroll-sentinel");
+    scrollObserver = new IntersectionObserver(
+        (entries) => {if (entries[0].isIntersecting) {renderNextBatch();}}, //Callback: render next batch when sentinel enters view
+        {root: container, threshold: 0}                                     //Options: observe intersection w/ container, trigger as soon as any part becomes visible in container.
+    );
+    scrollObserver.observe(sentinel);
+}
+
+// Stores reference to filter counter element. Counter is shown by updateFilterCounter() only when a filter is active.
+function initFilterCounter() {
+    filterCounterElement = document.getElementById("filter-counter");
+}
+
+// Shows number of matches only when filter is active with results. Called after every renderTableBody().
+function updateFilterCounter(matchCount) {
+    if (!filterCounterElement) {
+        console.error("Filter counter element not found.");
+    };
+    // If no active filter, or no matches, hide counter. 
+    // Since renderEmptyTableBody() shows a message for zero matches, no responsibility to indicate this here.
+    if (!currentFilter || matchCount === 0) {
+        filterCounterElement.textContent = "";
+        filterCounterElement.classList.remove("active");
+        return;
+    }
+    // Otherwise, show match count with correct pluralization, and add active class for styling
+    filterCounterElement.textContent = `${matchCount} match${matchCount !== 1 ? "es" : ""}`;
+    filterCounterElement.classList.add("active");
 }
 
 // Helper method collects and returns an array of all unique track IDs across playlists in first-seen order, used for rendering rows.
@@ -392,6 +495,7 @@ function handleCheckboxToggle(checkbox) {
     const trackID = checkbox.dataset.trackID;
     const playlistID = checkbox.dataset.playlistID;
     session.toggleTrack(playlistID, trackID);
+    cachedTrackIDsOrder = null; // membership changed, re-collect order on next render. //FUTURE - does a targeted update to cachedTrackIDsOrder make sense here, or is it fine to just reset and re-collect on next render?
     updateSaveStatus();
 }
 

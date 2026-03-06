@@ -170,9 +170,12 @@ class AppIteration2{
             return;
         }
 
-        //update label to indicate state on page
+        //update label to indicate state on page, show progress bar
         const label = document.getElementById("file-count-label");
         label.textContent = "loading playlists...";
+        document.getElementById("progress-bar").classList.add("loading");
+
+        // await new Promise(r => setTimeout(r, 2000)); // DEBUG
 
         //Perform import 
         await this.importFiles(files);
@@ -181,9 +184,10 @@ class AppIteration2{
         this.clearDisplay();
         await this.showAllPlaylists();
 
-        //reset file input and label for next import
+        //reset file input, label, and progress bar for next import
         document.getElementById("csvFileInput").value = "";
-        document.getElementById("file-count-label").textContent = "";        
+        document.getElementById("file-count-label").textContent = "";
+        document.getElementById("progress-bar").classList.remove("loading");
     }
 
     //Prompt user to select files, resolving with selection(s) once dialog closes.
