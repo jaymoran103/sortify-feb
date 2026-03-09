@@ -10,14 +10,13 @@ let tracks = {};                   // Lookup object mapping trackID to track dat
 let modifiedPlaylists = new Set(); // Set of 'dirty' playlist IDs to save.
 
 // Display Variables: Filter + Sort
-let currentFilter = "";      // lowercased search query, modified by search input event listener. Empty string means no filter
-let currentSort = "default"; // Sort state for table rendering
+let currentFilter = "";         // lowercased search query, modified by search input event listener. Empty string means no filter
+let currentSort = "default";    // Sort state for table rendering
 let cachedTrackIDsOrder = null; // Array of trackIDs in first-seen order. Recomputed lazily when playlist membership changes.
-// const SORT_STYLE = "deterministic" // "deterministic","chained"
-// let cachedLastSortOrder = null;
+let cachedFilteredIDs = null;   // Array of trackIDs reflecting given order and applied filter.
 
 // Lazy load state.
-const BATCH_SIZE = 100;   // Rows appended per scroll-triggered batch.
+const BATCH_SIZE = 100;  // Rows appended per scroll-triggered batch.
 let loadedCount  = 0;    // Tracks number of rows currently in the DOM for the active displayList.
 let displayList  = [];   // Full filtered+sorted ID list for current display state. Sliced by renderNextBatch().
 
@@ -26,7 +25,7 @@ let activeDropdown = null; // currently open dropdown panel, or null if none ope
 
 // DOM refs set once during init, used across render calls
 let filterCounterElement; // set by initFilterCounter(), 
-let scrollObserver;  // set by initScrollObserver()
+let scrollObserver;       // set by initScrollObserver()
 
 async function init() {
 
@@ -75,11 +74,11 @@ async function init() {
     console.log("Setting up workspace for playlists:", playlists.map(p => p.name));
     initScrollObserver(); // must be before first render so observer exists when sentinel enters view
     initSortControl();
-    initSearchControl(); //TODO: Standardize these two names? I see search as the user control, filter as the operation.
+    initSearchControl(); //FUTURE: Standardize these two names? I see search as the user control, filter as the operation.
     initFilterCounter();
 
     // Once display is mostly loaded, ensure controls paint before continuing.
-    await yieldForPaint();/// FUTURE: Consider showing some empty table element for visual consistency, populating once data is ready.
+    await yieldForPaint();//FUTURE: Consider showing some empty table element for visual consistency, populating once data is ready.
 
     //Continue workspace setup: event listeners, render workspace, and  hide progress bar.
     setupEventListeners();
@@ -90,7 +89,7 @@ async function init() {
 // Display an error message with a link back to the dashboard, used when session loading fails or no valid playlists are found.
 function showSessionError(message) {
     const container = document.getElementById("workspace-container");
-    //FUTURE extract this to html file and just inject message? OR workspace UI class
+    //HTML block feels out of place here. FUTURE: extract to separate html file or workspace ui class.
     container.innerHTML = `
         <div style="padding: 40px; text-align: center; color: #ccc;">
             <p style="font-size: 1.1em; color: red;">
@@ -108,6 +107,7 @@ async function showProgressBar() {
     document.getElementById("progress-bar").classList.add("loading");
     await yieldForPaint(); // Ensure the progress bar is visible before continuing with loading.
 }
+
 function hideProgressBar() {
     document.getElementById("progress-bar").classList.remove("loading");
 }
@@ -152,7 +152,7 @@ function renderTableHeader(){
 
         const menuBtn = document.createElement("button");
         menuBtn.className = "pl-menu-btn";
-        menuBtn.textContent = "▾";//TODO this is a hack, use same logic as sort dropdown
+        menuBtn.textContent = "▾";//FUTURE: Standardize dropdown look to match sort control?
         menuBtn.addEventListener("click", (e) => {
             e.stopPropagation(); // prevent document click handler from immediately closing this dropdown
             openPlaylistDropdown(playlist.playlistID, menuBtn);
@@ -169,18 +169,13 @@ function renderTableHeader(){
 
 // Renders body of workspace table. 
 // Applies filter, then sort, to cachedTrackIDsOrder (recomputed when membership changes invalidate cache)
-// NOTE: Always call resetLoadedRows() before this when sort or filter changes. FUTURE: consider calling it here, or moving logic here, rather than relying on callers to use both?
+// NOTE: Always call resetLoadedRows() before this when sort or filter changes. 
 function renderTableBody(){
-    // NOTE: Adhering to first-seen order means search results are deterministic for each option, rather than implictly reflecting prior sorts.
-    // FUTURE: enable stable sort chaining by feeding sort method the current sort order instead of re-collecting. 
-    //         "First-seen" could be a distinct sort option that would trump any prior sorts. Holding off for UX simplicity for now.
-    //         Logic should live in sortTrackIDs or a modified collectTrackIDsInOrder, though this is more complicated now that filter precedes sort. This seems like the better computational choice, so im not worried about bonus sort behavior right now.
-    
-    // Recompute displaylist from cached order of trackIDs, applying filter and sort. 
-    // Uses cached first-seen order: recomputes only when cache is reset (by handleCheckboxToggle) 
-    // FUTURE: cache further, remembering results of most recent filter or sort? Not a concern now, membership is the only operation that scales with playist size
+
+    // Recompute displaylist, applying filter and sort. 
+    // Caches first-seen order and filtered order, relying on callers to reset them when a playlist modification would invalidate the current order.
     const trackIDsInOrder = cachedTrackIDsOrder ??= collectTrackIDsInOrder(playlists); //get trackIDs, cache if not present
-    const filteredIDs = filterTrackIDs(trackIDsInOrder, currentFilter);
+    const filteredIDs = cachedFilteredIDs ??= filterTrackIDs(trackIDsInOrder, currentFilter);
     const sortedIDs = sortTrackIDs(filteredIDs, currentSort);
     displayList = sortedIDs;
 
@@ -267,7 +262,7 @@ function createTrackRow(trackID, displayIndex){
     return row;
 }
 
-//Helper method creates track info cell with title, artist, and album. FUTURE: Consider adding album art, but probably never worth it with API rate limits.
+//Helper method creates track info cell with title, artist, and album.
 // If info somehow isn't available, fields fall back to placeholders. This should be hard to encounter since importer currently rejects tracks missing basic metadata.
 function createTrackInfoCell(trackID){
     const track = tracks[trackID];
@@ -279,7 +274,7 @@ function createTrackInfoCell(trackID){
     trackNameDiv.textContent = track ? track.title : trackID;
     cell.appendChild(trackNameDiv);
 
-    //Other metadata (artist and album) sits in separate div below, with a separateor dot between. FUTURE: think about making these links to spotify IDs or something, opening in window or elsewhere. Since data currently comes through a third party, this would be a roundabout process to acquire for now.
+    //Other metadata (artist and album) sits in separate div below, with a separator dot between. FUTURE: think about making these links to spotify IDs or something, opening in window or elsewhere. Since data currently comes through a third party, this would be a roundabout process to acquire for now.
     const trackMetaDiv = document.createElement("div");
     trackMetaDiv.className = "track-meta";
 
@@ -324,7 +319,7 @@ function createCheckboxCells(trackID){
 }
 
 // Main Sort Method: returns sorted array of trackIDs based on given criteria. 
-// FUTURE: Missing fields currently sort to top, consider putting them at bottom for inessential metadata like BPM or genre info
+// NOTE: Missing fields currently sort to top, consider putting them at bottom for inessential metadata like BPM or genre info
 // FUTURE: Make sort output more intuitive by stripping non A-Z characters and ignoring case. Similarly strip " the" from names?
 function sortTrackIDs(trackIDs, criteria) {
     //Return as-is for default
@@ -361,7 +356,6 @@ function filterTrackIDs(trackIDs, query) {
 }
 
 // Build and inject the search input into #search-controls. Called once in init()
-// FUTURE: Extract methods like this to a separate UI component?
 function initSearchControl() {
     const container = document.getElementById("search-controls");
 
@@ -378,7 +372,8 @@ function initSearchControl() {
         clearTimeout(debounceTimer);
         debounceTimer = setTimeout(() => {
             currentFilter = input.value.trim().toLowerCase();
-            resetLoadedRows(); // clear rows before re-rendering with new filter
+            cachedFilteredIDs = null; // filter changed. is this needed
+            resetLoadedRows();
             renderTableBody();
         }, 200);
     });
@@ -387,7 +382,6 @@ function initSearchControl() {
 }
 
 // Build and inject the sort dropdown into #sort-controls. Called once in init()
-// FUTURE: Extract methods like this to a separate UI component?
 function initSortControl() {
     const container = document.getElementById("sort-controls");
     
@@ -405,9 +399,7 @@ function initSortControl() {
     select.id = "sort-select";
 
     // Define options for sorting, then create and append option elements to the select.
-    //FUTURE: add fields dynamically based on available metadata in later versions?
     const options = [
-        // { value: "default", label: "Default order" },
         { value: "default", label: "Default" },
         { value: "title",   label: "Title" },
         { value: "artist",  label: "Artist" },
@@ -448,7 +440,7 @@ function initFilterCounter() {
     filterCounterElement = document.getElementById("filter-counter");
 }
 
-// Shows number of matches only when filter is active with results. Called after every renderTableBody().
+// Shows number of matches only when filter is active with results. Called in renderTableBody() to ensure accurate count.
 function updateFilterCounter(matchCount) {
     if (!filterCounterElement) {
         console.error("Filter counter element not found.");
@@ -516,7 +508,7 @@ function setupEventListeners() {
         }
     });
 
-    // Close dropdown on outside click. TODO this works, but is it the best practice to fire this on every click in the document?
+    // Close dropdown on outside click. 
     document.addEventListener("click", () => closePlaylistDropdown());
 
     // Close dropdown on Escape
@@ -531,7 +523,7 @@ function handleCheckboxToggle(checkbox) {
     const trackID = checkbox.dataset.trackID;
     const playlistID = checkbox.dataset.playlistID;
     session.toggleTrack(playlistID, trackID);
-    cachedTrackIDsOrder = null; // membership changed, re-collect order on next render. //FUTURE - does a targeted update to cachedTrackIDsOrder make sense here, or is it fine to just reset and re-collect on next render?
+    wipeCaches(); // membership changed, re-collect order and filteredIDs on next render. //FUTURE - does a targeted update to cachedTrackIDsOrder and cachedFilteredIDs make sense here, or is it fine to just reset and re-collect on next render?
     updateSaveStatus();
 }
 
@@ -582,10 +574,7 @@ async function handleSave() {
     }
 }
 
-init();
-
-// Dropdown Behavior - TODO should probably extract to separate file
-
+// Dropdown Behavior - FUTURE: Refactor handlers to separate class?
 
 // Close any open dropdown by removing from dom. Skips if no dropdown is open 
 function closePlaylistDropdown() {
@@ -595,7 +584,7 @@ function closePlaylistDropdown() {
     }
 }
 
-// Build and open a dropdown for the given playlistID, anchored to a given button element. //TODO generalize in case something else opens a dropdown? Shouldnt matter
+// Build and open a dropdown for the given playlistID, anchored to a given button element.
 function openPlaylistDropdown(playlistID, anchorButton) {
 
     // Close existing dropdown if open, then build new dropdown panel for the given playlistID.
@@ -623,8 +612,8 @@ function buildDropdownPanel(playlistID) {
     const ul = document.createElement("ul");
 
     const items = [
-        { label: "Select all",            action: () => handleSelectAll(playlistID, true) },
-        { label: "Deselect all",          action: () => handleSelectAll(playlistID, false) },
+        { label: "Select all",            action: () => handleBulkMembershipUpdate(playlistID, true) },
+        { label: "Deselect all",          action: () => handleBulkMembershipUpdate(playlistID, false) },
         // { divider: true },
         { label: "Rename",                action: () => handleRenamePlaylist(playlistID) },
         { label: "Duplicate",             action: () => handleDuplicatePlaylist(playlistID) },
@@ -652,30 +641,28 @@ function buildDropdownPanel(playlistID) {
 
 // Dropdown Action Handlers
 
-// Handler to select/deselect all. Operate on the full filtered set of trackIDs, not just the currently rendered page. FUTURE: consider making this an additional option  '
-// Argument mode determines whether to select or deselect all. TODO document that better and review method, consider splitting to 2 methods
-function handleSelectAll(playlistID, shouldSelect) {
-    // Operate on full filtered set, not just current page — "all" = all matching tracks
-    //TODO cache this so selections don't require a re-filter?
-    const allFiltered = filterTrackIDs(
-        cachedTrackIDsOrder ??= collectTrackIDsInOrder(playlists),
-        currentFilter
-    );
+// Handler for select/deselect all - updates membership of each shown track in a playlist to match desired state.
+// Operates on the full filtered set of trackIDs, not just the currently rendered page. 
+// FUTURE: consider additional option to select all, filtered or not
+function handleBulkMembershipUpdate(playlistID, desiredState) {
+
+    // Access or recompute cached track ID order and filtered IDs, which determine which tracks are shown and should be toggled.
+    cachedTrackIDsOrder ??= collectTrackIDsInOrder(playlists);
+    cachedFilteredIDs ??= filterTrackIDs(cachedTrackIDsOrder, currentFilter);
+
     const playlist = playlists.find(p => p.playlistID === playlistID);
 
     // Toggle track status if it doesn't match desired state
-    for (const id of allFiltered) {
-        const inPlaylist = playlist.trackIDSet.has(id);
-        if ((shouldSelect && !inPlaylist) || (!shouldSelect && inPlaylist)) {
+    for (const id of cachedFilteredIDs) {
+        const currentState = playlist.trackIDSet.has(id);
+        // (A && !B) || (!A && B) equivalent to (A!=B)
+        if (currentState !== desiredState) { 
             session.toggleTrack(playlistID, id);
         }
     }
-
-    // cachedTrackIDsOrder = null; Re-render without resetting order. 
-    // TODO check if other handlers invalidate cache WITHOUT resetting, this would trigger them. 
-    // FUTURE refactor these resets to new method with a boolean argument for cache reset. Good to make this relationship explict and keep UI predictable on click actions.
+    //FUTURE: Move reset and save update to renderWorkspaceTable?
     resetLoadedRows();
-    renderTableBody();
+    renderWorkspaceTable();
     updateSaveStatus();
 }
 
@@ -688,15 +675,14 @@ function handleRenamePlaylist(playlistID) {
     // Validate input: return early for undefined, empty, or whitespace-only names, as well as unchanged name.
     if (!newName || !newName.trim() || newName.trim() === playlist.name) return;
 
-    //If valid, update name in session, re-rendering header and saving. TODO ensure tracks in memory have all the info they need. Should be fine since theyre owned by the playlist objects, which is modifed by session.
+    //If valid, update name in session, then update display to reflect change.
     session.renamePlaylist(playlistID, newName.trim());
-    renderTableHeader();
+    renderWorkspaceTable();
     updateSaveStatus();
 }
 
 function handleAddPlaylist() {
-    // TODO: prompts for a raw IDB id, implement playlist selector UI.
-    // FUTURE: replace with a modal listing playlists not already in the workspace? Might not be viable since library could be huge. probably better to facilitate search.
+    // FUTURE: If live playlist adding remains a feature, implement proper selector UI for playlists. Can probably share logic with dashboard UI once its redone.
     const input = window.prompt("Enter playlist ID to add:");
     if (!input) return;
 
@@ -710,9 +696,7 @@ function handleAddPlaylist() {
     //If valid, attempt to add playlist to session. 
     session.addPlaylist(id).then(pl => {
         if (!pl) { alert("Playlist not found or already in workspace."); return; }
-
-        //Invalidate cache, re-render workspace, and update save status to reflect new playlist
-        cachedTrackIDsOrder = null;
+        resetLoadedRows();
         renderWorkspaceTable();
         updateSaveStatus();
     });
@@ -720,21 +704,16 @@ function handleAddPlaylist() {
 
 // Handler for removing a playlist from the workspace.
 function handleRemovePlaylist(playlistID) {
-    //Remove from workspace session
     session.removePlaylist(playlistID);
-    //re-renders workspace and updates save status.
-    cachedTrackIDsOrder = null;
+    resetLoadedRows();
     renderWorkspaceTable();
     updateSaveStatus();
 }
 
 //Handler for duplicating a playlist within the workspace. 
 function handleDuplicatePlaylist(playlistID) {
-    const newPl = session.duplicatePlaylist(playlistID);
-
-    //Validate input: return early if duplication failed somehow. TODO check if this happens if playlistID is invalid
-    if (!newPl) return;
-    cachedTrackIDsOrder = null;
+    session.duplicatePlaylist(playlistID);  
+    resetLoadedRows();
     renderWorkspaceTable();
     updateSaveStatus();
 }
@@ -748,7 +727,20 @@ function handleCreateEmptyPlaylist() {
 
     // If valid, create new empty playlist in session, re-render workspace, and update save status to reflect new playlist.
     session.createEmptyPlaylist(name.trim());
-    cachedTrackIDsOrder = null;//TODO does this need to be here?
+
+    resetLoadedRows();
     renderWorkspaceTable();
     updateSaveStatus();
 }
+
+// Wipes order and filter caches, causing them to be recomputed on next access. Currently only used in handleCheckboxToggle, keeping for now for clarity
+function wipeCaches() {
+    cachedTrackIDsOrder = null;
+    cachedFilteredIDs = null;
+}
+
+
+init();
+
+
+

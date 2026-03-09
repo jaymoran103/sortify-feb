@@ -234,6 +234,13 @@ button:hover:not(:disabled) {
     cursor: pointer;
 }
 
+/* Playlist header dropdown trigger hover */
+.pl-menu-btn:hover:not(:disabled) {
+    color: var(--color-text);
+    background: var(--color-row-hover);
+    text-decoration: none;
+}
+
 
 
 /* Playlist dropdown panel */

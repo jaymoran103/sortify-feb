@@ -206,7 +206,8 @@ export class WorkspaceSession {
         // Before proceeding, ensure all pending playlists have real IDB IDs.
         await this.resolvePendingPlaylists();
 
-        // Write modified pre-existing playlists
+        // Write modified pre-existing playlists in parallel, ensuring completion before clearing modifiedPlaylists set.
+        const savePromises = [];
         for (const playlistID of this.modifiedPlaylists) {
             const playlist = this.playlists.find(p => p.playlistID === playlistID);
             if (!playlist) {
@@ -218,8 +219,13 @@ export class WorkspaceSession {
             console.log(
                 `WorkspaceSession: Writing '${playlist.name}' (id=${playlist.id}) — ${cleanPlaylist.trackIDs.length} tracks`
             );
-            await this.dataManager.replaceRecord("playlists", playlist.id, cleanPlaylist)
+            savePromises.push(
+                this.dataManager.replaceRecord("playlists", playlist.id, cleanPlaylist)
+            );
         }
+
+        // Await all writes before clearing.
+        await Promise.all(savePromises);
         this.modifiedPlaylists.clear();
         console.log("WorkspaceSession: Save complete");
     }
@@ -235,14 +241,13 @@ export class WorkspaceSession {
             const oldTempID = pl.playlistID;
             const rawPl = { type: "playlist", name: pl.name, trackIDs: [...pl.trackIDs] };//Need to enforce playlist type here?
 
-            // Get real ID from IDB upon writing, patch into live object.
+            // Get real ID from IDB upon writing, patch into live object. Awaiting ensures sequential ID assignment, avoiding potential race condition.
             const realId = await this.dataManager.createRecord("playlists", rawPl);
             pl.id = realId;
             pl.playlistID = String(realId);
 
-            // Remove old reference to temp ID from modifiedPlaylists and pendingPlaylists.
+            // Remove old reference to temp ID from modifiedPlaylists.
             this.modifiedPlaylists.delete(oldTempID);
-            this.pendingPlaylists = this.pendingPlaylists.filter(p => p.playlistID !== oldTempID); // remove from pending list
             console.log(`WorkspaceSession: Created '${pl.name}' (id=${realId})`);
         }
         this.pendingPlaylists = [];
