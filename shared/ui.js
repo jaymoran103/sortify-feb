@@ -15,7 +15,8 @@ export async function renderPlaylistTable(dataManager,playlist){
 
     //Set playlist name as header, create table for tracks
     playlistDiv.innerHTML = `
-        <h3>${playlist.name} (${playlist.trackIDs.length} tracks)</h3>
+        <h3>${playlist.name} </h3>
+        <h4>${playlist.trackIDs.length} tracks  - id:${playlist.id}</h4>
         <table>
             <thead>
                 ${renderPlaylistHeader()}

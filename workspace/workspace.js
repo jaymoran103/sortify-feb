@@ -21,11 +21,12 @@ const BATCH_SIZE = 100;   // Rows appended per scroll-triggered batch.
 let loadedCount  = 0;    // Tracks number of rows currently in the DOM for the active displayList.
 let displayList  = [];   // Full filtered+sorted ID list for current display state. Sliced by renderNextBatch().
 
-//TODO fix
+// Dropdown state
+let activeDropdown = null; // currently open dropdown panel, or null if none open.
+
 // DOM refs set once during init, used across render calls
 let filterCounterElement; // set by initFilterCounter(), 
 let scrollObserver;  // set by initScrollObserver()
-
 
 async function init() {
 
@@ -140,12 +141,25 @@ function renderTableHeader(){
     titleTh.textContent = "TRACK";
     row.appendChild(titleTh);
 
-    // One column per playlist
+    // One column per playlist, with name span + dropdown trigger button
     for (const playlist of playlists) {
         const th = document.createElement("th");
         th.className = "checkbox-cell";
-        th.textContent = playlist.name;
-        th.dataset.playlistID = playlist.playlistID; // store playlist ID for reference
+        th.dataset.playlistID = playlist.playlistID;
+
+        const nameSpan = document.createElement("span");
+        nameSpan.textContent = playlist.name;
+
+        const menuBtn = document.createElement("button");
+        menuBtn.className = "pl-menu-btn";
+        menuBtn.textContent = "▾";//TODO this is a hack, use same logic as sort dropdown
+        menuBtn.addEventListener("click", (e) => {
+            e.stopPropagation(); // prevent document click handler from immediately closing this dropdown
+            openPlaylistDropdown(playlist.playlistID, menuBtn);
+        });
+
+        th.appendChild(nameSpan);
+        th.appendChild(menuBtn);
         row.appendChild(th);
     }
 
@@ -477,6 +491,12 @@ function setupEventListeners() {
     document.getElementById("back-btn").addEventListener("click", () => {
         window.location.href = "..";//Redirect to dashboard/home page
     });
+
+    // Playlist management buttons
+    // FUTURE - Separate section with more controls: reorder, duplicate, create, delete,import/export. Plus shortcut button here for most common, create empty
+    document.getElementById("add-playlist-btn").addEventListener("click", handleAddPlaylist);
+    document.getElementById("new-playlist-btn").addEventListener("click", handleCreateEmptyPlaylist);
+
     // For any checkbox change in the table body, handle toggle with reference to the event target
     document.getElementById("table-body").addEventListener("change", (e) => {
         if (e.target.type === "checkbox") {
@@ -496,6 +516,13 @@ function setupEventListeners() {
         }
     });
 
+    // Close dropdown on outside click. TODO this works, but is it the best practice to fire this on every click in the document?
+    document.addEventListener("click", () => closePlaylistDropdown());
+
+    // Close dropdown on Escape
+    document.addEventListener("keydown", (e) => {
+        if (e.key === "Escape") closePlaylistDropdown();
+    });
 }
 
 // Handler for checkbox click event. State manipulation now happns in session counterpart.
@@ -511,13 +538,13 @@ function handleCheckboxToggle(checkbox) {
 // Update the save status message based on whether there are unsaved changes based on status of changes
 function updateSaveStatus() {
     const saveStatus = document.getElementById("save-status");
+    const saveBtn = document.getElementById("save-btn");
+    const totalChanges = modifiedPlaylists.size + session.pendingPlaylists.length;
 
-    if (modifiedPlaylists.size > 0) {
-        const saveBtn = document.getElementById("save-btn");
+    if (totalChanges > 0) {
         saveBtn.disabled = false;
-        saveStatus.textContent = `${modifiedPlaylists.size} playlist(s) modified`;
+        saveStatus.textContent = `${totalChanges} playlist(s) modified`;
     } else {
-        const saveBtn = document.getElementById("save-btn");
         saveBtn.disabled = true;
         saveStatus.textContent = "";
     }
@@ -526,21 +553,23 @@ function updateSaveStatus() {
 async function handleSave() {
     const saveBtn = document.getElementById("save-btn");
     const saveStatus = document.getElementById("save-status");
+    const hadPending = session.pendingPlaylists.length > 0;
 
     saveBtn.disabled = true;
     saveStatus.textContent = "Saving...";
-    console.log("handleSave: Saving... (", modifiedPlaylists.size, "playlists)");
+    console.log("handleSave: Saving... (", modifiedPlaylists.size, "modified,", session.pendingPlaylists.length, "pending)");
 
     try {
         await session.save();
 
-        // Task 4: show timestamp so users can confirm persistence
+        // Pending playlists now have real IDB IDs — rebuild DOM so dataset attributes reflect them
+        if (hadPending) renderWorkspaceTable();
+
         const savedTime = new Date().toLocaleTimeString();
         saveStatus.textContent = `Saved at ${savedTime}`;
         console.log(`[workspace] Save successful at ${savedTime}`);
 
         setTimeout(() => {
-            // Clear status only if no new changes have been made since save completed
             if (modifiedPlaylists.size === 0) {
                 saveStatus.textContent = `Last saved: ${savedTime}`;
             }
@@ -549,13 +578,177 @@ async function handleSave() {
     } catch (err) {
         console.error("[workspace] Save failed:", err);
         saveStatus.textContent = "Save failed — see console";
-        saveBtn.disabled = false; // re-enable button now so user can retry//TODO let modifiedPlaylist count determine this for consistency?
+        saveBtn.disabled = false;
     }
-
-    //Timestamp should negate need to time out the status message
-    // setTimeout(() => {
-    //     saveStatus.textContent = "";
-    // }, 2000);
 }
 
 init();
+
+// Dropdown Behavior - TODO should probably extract to separate file
+
+
+// Close any open dropdown by removing from dom. Skips if no dropdown is open 
+function closePlaylistDropdown() {
+    if (activeDropdown) {
+        activeDropdown.remove();
+        activeDropdown = null;
+    }
+}
+
+// Build and open a dropdown for the given playlistID, anchored to a given button element. //TODO generalize in case something else opens a dropdown? Shouldnt matter
+function openPlaylistDropdown(playlistID, anchorButton) {
+
+    // Close existing dropdown if open, then build new dropdown panel for the given playlistID.
+    closePlaylistDropdown();
+    const panel = buildDropdownPanel(playlistID);
+
+    // Position below the anchor button using fixed coords to avoid table overflow issues
+    const rect = anchorButton.getBoundingClientRect();
+    panel.style.position = "fixed";
+    panel.style.top  = rect.bottom + "px";
+    panel.style.left = rect.left + "px";
+
+    document.body.appendChild(panel);
+    activeDropdown = panel;
+}
+
+// Build and return a dropdown panel for the given playlistID
+function buildDropdownPanel(playlistID) {
+    const panel = document.createElement("div");
+    panel.className = "pl-dropdown";
+
+    // Prevent outside click listener from immediately closing this panel
+    panel.addEventListener("click", (e) => e.stopPropagation());
+
+    const ul = document.createElement("ul");
+
+    const items = [
+        { label: "Select all",            action: () => handleSelectAll(playlistID, true) },
+        { label: "Deselect all",          action: () => handleSelectAll(playlistID, false) },
+        // { divider: true },
+        { label: "Rename",                action: () => handleRenamePlaylist(playlistID) },
+        { label: "Duplicate",             action: () => handleDuplicatePlaylist(playlistID) },
+        { label: "Remove from workspace", action: () => handleRemovePlaylist(playlistID) },
+    ];
+
+    // For each item, create an li element. If it's a divider, add the divider class. Otherwise, set text and click handler to trigger the corresponding action and close the dropdown.
+    for (const item of items) {
+        const li = document.createElement("li");
+        if (item.divider) {
+            li.className = "dropdown-divider";
+        } else {
+            li.textContent = item.label;
+            li.addEventListener("click", () => {
+                closePlaylistDropdown();
+                item.action();
+            });
+        }
+        ul.appendChild(li);
+    }
+
+    panel.appendChild(ul);
+    return panel;
+}
+
+// Dropdown Action Handlers
+
+// Handler to select/deselect all. Operate on the full filtered set of trackIDs, not just the currently rendered page. FUTURE: consider making this an additional option  '
+// Argument mode determines whether to select or deselect all. TODO document that better and review method, consider splitting to 2 methods
+function handleSelectAll(playlistID, shouldSelect) {
+    // Operate on full filtered set, not just current page — "all" = all matching tracks
+    //TODO cache this so selections don't require a re-filter?
+    const allFiltered = filterTrackIDs(
+        cachedTrackIDsOrder ??= collectTrackIDsInOrder(playlists),
+        currentFilter
+    );
+    const playlist = playlists.find(p => p.playlistID === playlistID);
+
+    // Toggle track status if it doesn't match desired state
+    for (const id of allFiltered) {
+        const inPlaylist = playlist.trackIDSet.has(id);
+        if ((shouldSelect && !inPlaylist) || (!shouldSelect && inPlaylist)) {
+            session.toggleTrack(playlistID, id);
+        }
+    }
+
+    // cachedTrackIDsOrder = null; Re-render without resetting order. 
+    // TODO check if other handlers invalidate cache WITHOUT resetting, this would trigger them. 
+    // FUTURE refactor these resets to new method with a boolean argument for cache reset. Good to make this relationship explict and keep UI predictable on click actions.
+    resetLoadedRows();
+    renderTableBody();
+    updateSaveStatus();
+}
+
+// Handler for renaming a playlist. Prompts for new name, then updates session and re-renders header to reflect change.
+function handleRenamePlaylist(playlistID) {
+    const playlist = playlists.find(p => p.playlistID === playlistID);
+    if (!playlist) return;
+    const newName = window.prompt("Rename playlist:", playlist.name);
+
+    // Validate input: return early for undefined, empty, or whitespace-only names, as well as unchanged name.
+    if (!newName || !newName.trim() || newName.trim() === playlist.name) return;
+
+    //If valid, update name in session, re-rendering header and saving. TODO ensure tracks in memory have all the info they need. Should be fine since theyre owned by the playlist objects, which is modifed by session.
+    session.renamePlaylist(playlistID, newName.trim());
+    renderTableHeader();
+    updateSaveStatus();
+}
+
+function handleAddPlaylist() {
+    // TODO: prompts for a raw IDB id, implement playlist selector UI.
+    // FUTURE: replace with a modal listing playlists not already in the workspace? Might not be viable since library could be huge. probably better to facilitate search.
+    const input = window.prompt("Enter playlist ID to add:");
+    if (!input) return;
+
+    //Validate input: return early if not a valid, positive integer.
+    const id = Number(input);
+    if (!Number.isInteger(id) || id <= 0) {
+        alert("Please enter a valid numeric playlist ID.");
+        return;
+    }
+
+    //If valid, attempt to add playlist to session. 
+    session.addPlaylist(id).then(pl => {
+        if (!pl) { alert("Playlist not found or already in workspace."); return; }
+
+        //Invalidate cache, re-render workspace, and update save status to reflect new playlist
+        cachedTrackIDsOrder = null;
+        renderWorkspaceTable();
+        updateSaveStatus();
+    });
+}
+
+// Handler for removing a playlist from the workspace.
+function handleRemovePlaylist(playlistID) {
+    //Remove from workspace session
+    session.removePlaylist(playlistID);
+    //re-renders workspace and updates save status.
+    cachedTrackIDsOrder = null;
+    renderWorkspaceTable();
+    updateSaveStatus();
+}
+
+//Handler for duplicating a playlist within the workspace. 
+function handleDuplicatePlaylist(playlistID) {
+    const newPl = session.duplicatePlaylist(playlistID);
+
+    //Validate input: return early if duplication failed somehow. TODO check if this happens if playlistID is invalid
+    if (!newPl) return;
+    cachedTrackIDsOrder = null;
+    renderWorkspaceTable();
+    updateSaveStatus();
+}
+
+// Handler for creating a new empty playlist.
+function handleCreateEmptyPlaylist() {
+    const name = window.prompt("New playlist name:");
+
+    // Validate input: return early for undefined, empty, or whitespace-only names.
+    if (!name || !name.trim()) return;
+
+    // If valid, create new empty playlist in session, re-render workspace, and update save status to reflect new playlist.
+    session.createEmptyPlaylist(name.trim());
+    cachedTrackIDsOrder = null;//TODO does this need to be here?
+    renderWorkspaceTable();
+    updateSaveStatus();
+}

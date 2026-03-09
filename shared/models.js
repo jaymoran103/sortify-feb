@@ -1,5 +1,9 @@
 //Basic data models for playlists and tracks. More metadata to come
 
+
+//FUTURE define augmented session-layer playlist fields here? 
+
+
 //Create playlist based on provided fields.
 export function createPlaylist(name, trackIDs){
     return {

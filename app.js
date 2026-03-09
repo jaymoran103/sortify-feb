@@ -117,7 +117,7 @@ class AppIteration2{
     }
 
     // Save playlist IDs to sessionStorage and navigate to workspace.
-    // TODO add session format to models.js: { playlistIds: number[], timestamp: string }
+    // FUTURE add session format to models.js: { playlistIds: number[], timestamp: string }
     openWorkspaceWithPlaylists(playlistIds) {
         const workspaceSession = {
             playlistIds,

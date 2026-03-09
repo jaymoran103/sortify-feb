@@ -12,7 +12,9 @@ export class WorkspaceSession {
         this.playlists = [];                     // array of augmented playlist objects (added playlistID string and trackIDSet for efficient lookup)
         this.tracks = {};                        // lookup: trackID → track object
         this.modifiedPlaylists = new Set();      // set of playlistID strings with unsaved changes
-        this._dataManager = null;
+        this.pendingPlaylists = [];              // new playlists not yet written to IDB (have temp string IDs)
+        this.pendingCounter = 0;                 // counter for generating temp IDs
+        this.dataManager = null;
     }
 
     // Load playlists and their tracks from IndexedDB.
@@ -21,8 +23,8 @@ export class WorkspaceSession {
         console.log(`WorkspaceSession: load() called with playlistIds: ${playlistIds}`);
 
         // Initialize database connection
-        this._dataManager = new DataManager();
-        await this._dataManager.init();
+        this.dataManager = new DataManager();
+        await this.dataManager.init();
         console.log("DataManager initialized in WorkspaceSession");
 
         // Fetch playlists
@@ -32,7 +34,7 @@ export class WorkspaceSession {
             // fetch each playlist by ID. 
             //FUTURE - should probably add a bulk-get-by-IDs method to DataManager to minimize transactions
             const results = await Promise.all(
-                playlistIds.map(id => this._dataManager.getRecord("playlists", id))
+                playlistIds.map(id => this.dataManager.getRecord("playlists", id))
             );
             // Filter out nulls (playlist deleted or ID invalid.) FUTURE - log these or show a better warning in UI?
             rawPlaylists = results.filter(Boolean);
@@ -43,7 +45,7 @@ export class WorkspaceSession {
             }
         } else {
             // Load all playlists if no specific IDs provided
-            rawPlaylists = await this._dataManager.getAllRecords("playlists");
+            rawPlaylists = await this.dataManager.getAllRecords("playlists");
             console.log(`Loaded all ${rawPlaylists.length} playlists from IDB to WorkspaceSession`);
         }
         //Warn if no playlists were loaded
@@ -54,28 +56,116 @@ export class WorkspaceSession {
         // Fetch all tracks into lookup object.
         //FUTURE: consider only fetching tracks referenced by loaded playlists in case user library is huge. 
         //        Fine for current scale and avoids N individual lookups
-        const allTracks = await this._dataManager.getAllRecords("tracks");
+        const allTracks = await this.dataManager.getAllRecords("tracks");
         this.tracks = {};
         for (const track of allTracks) {
             this.tracks[track.trackID] = track;
         }
         console.log(`WorkspaceSession: ${allTracks.length} tracks loaded into lookup objct`);
 
-        // Augment playlist objects with session-layer fields
-        // playlistID: string of IDB 'id' field- used in workspace.js for dataset comparisons
-        // trackIDSet: Set facilitating efficient membership checks, kept in sync with trackIDs array
-        // trackIDs: cloned array so in-memory edits don't affect the raw IDB data until save
-        this.playlists = rawPlaylists.map(pl => ({
-            ...pl,
-            playlistID: String(pl.id),           // string to match checkbox.dataset.playlistID comparisons
-            trackIDs: [...(pl.trackIDs || [])],
-            trackIDSet: new Set(pl.trackIDs || [])
-        }));
+        // Augment playlist objects with session-layer fields (via shared helper)
+        this.playlists = rawPlaylists.map(pl => this.augmentPlaylist(pl));
 
         console.log(
             "WorkspaceSession: Session done loading.\nPlaylists:",
             this.playlists.map(p => `'${p.name}' (${p.trackIDs.length} tracks)`)
         );
+    }
+
+    // Create augmented playlist object with session-layer fields: playlistID (as string), trackIDs (array), trackIDSet (Set). 
+    // Input playlist is not mutated.
+    augmentPlaylist(pl) {
+        return {
+            ...pl,
+            playlistID: String(pl.id),
+            trackIDs: [...(pl.trackIDs || [])],
+            trackIDSet: new Set(pl.trackIDs || [])
+        };
+    }
+
+    // Fetch an existing IDB playlist by id and add it to the session.
+    // No-ops if already in session. Returns the augmented playlist or null.
+    //FUTURE: honestly might not be a permanent feature, completely depends on future of dashboard / API use. Direct import via API? //Having a local copy will always be helpful for bottlenecks, so worth supporting here.
+    async addPlaylist(id) {
+        const raw = await this.dataManager.getRecord("playlists", id);
+        if (!raw) {
+            // alert(`addPlaylist: no playlist found for IDB id ${id}`);
+            console.warn(`addPlaylist: no playlist found for IDB id ${id}`);
+            return null;
+        }
+        if (this.playlists.some(p => p.id === raw.id)) {
+            // alert(`addPlaylist: playlist id ${id} is already in this session`);
+            console.warn(`addPlaylist: playlist id ${id} is already in this session`);
+            return null;
+        }
+        const augmented = this.augmentPlaylist(raw);
+        this.playlists.push(augmented);
+        return augmented;
+    }
+
+    // Remove a playlist from the session. Does not delete from IDB.
+    // Cleans up modifiedPlaylists and pendingPlaylists entries.
+    removePlaylist(playlistID) {
+        const idx = this.playlists.findIndex(p => p.playlistID === playlistID);
+        if (idx === -1) {
+            console.warn(`removePlaylist: no playlist found for ID '${playlistID}'`);
+            return;
+        }
+        this.playlists.splice(idx, 1); // remove from session
+        this.modifiedPlaylists.delete(playlistID); // if it was modified, remove from modified set
+        //check if playlist was pending. If so, remove from pending list
+        const pendingIdx = this.pendingPlaylists.findIndex(p => p.playlistID === playlistID);
+        if (pendingIdx !== -1) this.pendingPlaylists.splice(pendingIdx, 1);
+    }
+
+    // Rename a playlist in-memory. Updates in IDB on next save()
+    renamePlaylist(playlistID, newName) {
+        const playlist = this.playlists.find(p => p.playlistID === playlistID);
+        if (!playlist) {
+            console.warn(`renamePlaylist: no playlist found for ID '${playlistID}'`);
+            return;
+        }
+        // Update name, mark as modified for saving.
+        playlist.name = newName;
+        this.modifiedPlaylists.add(playlistID);
+    }
+
+    // Duplicate a playlist in-memory using a temp ID. Updates in IDB on next save()
+    duplicatePlaylist(playlistID) {
+        const source = this.playlists.find(p => p.playlistID === playlistID);
+        if (!source) {
+            console.warn(`duplicatePlaylist: no playlist found for ID '${playlistID}'`);
+            return null;
+        }
+        const tempID = `pending-${++this.pendingCounter}`;
+        const newPl = {
+            type: "playlist",
+            id: tempID,           // temp — patched to real IDB id on save
+            name: source.name + " (copy)",
+            trackIDs: [...source.trackIDs],
+            playlistID: tempID,
+            trackIDSet: new Set(source.trackIDs)
+        };
+        this.playlists.push(newPl);
+        this.pendingPlaylists.push(newPl);
+        return newPl;
+    }
+
+    // Create a new empty playlist in-memory using a temp ID. Updates in IDB on next save()
+    createEmptyPlaylist(name) {
+        const tempID = `pending-${++this.pendingCounter}`;
+        //FUTURE: enforce type using a factory function or class method. Create counterpart in models.js?
+        const newPl = {
+            type: "playlist",
+            id: tempID,
+            name,
+            trackIDs: [],
+            playlistID: tempID,
+            trackIDSet: new Set()
+        };
+        this.playlists.push(newPl);
+        this.pendingPlaylists.push(newPl);
+        return newPl;
     }
 
     // Toggle track membership in a playlist. (replaces logic in handleCheckboxToggle, which calls this)
@@ -102,47 +192,60 @@ export class WorkspaceSession {
         this.modifiedPlaylists.add(playlistId);
     }
 
-    // main save function persists all modified playlists to IndexedDB.
-    // Strips session layer fields (trackIDSet, playlistID) before writing, then clears modifiedPlaylists on success.
+    // Persist all pending (new) and modified playlists to IndexedDB.
+    // Pending playlists are written first and their live objects patched with real IDB IDs
+    // before modified playlists are processed.
     async save() {
-        if (this.modifiedPlaylists.size === 0) {
+        const hasPending  = this.pendingPlaylists.length > 0;
+        const hasModified = this.modifiedPlaylists.size > 0;
+        if (!hasPending && !hasModified) {
             console.log("save() called but no changes pending");
             return;
         }
 
-        console.log(
-            `WorkspaceSession: Saving ${this.modifiedPlaylists.size} playlist(s):`,
-            [...this.modifiedPlaylists]
-        );
+        // Before proceeding, ensure all pending playlists have real IDB IDs.
+        await this.resolvePendingPlaylists();
 
-        // store promises for each playlist save so we can await them all together and clear modifiedPlaylists only if/when all succeed.
-        const savePromises = [];
-
+        // Write modified pre-existing playlists
         for (const playlistID of this.modifiedPlaylists) {
             const playlist = this.playlists.find(p => p.playlistID === playlistID);
             if (!playlist) {
-                console.warn(`No playlist found for ID '${playlistID}' while saving- skipping`);
+                console.warn(`No playlist found for ID '${playlistID}' while saving — skipping`);
                 continue;
             }
-
-            // Strip session layer fields from playlist object before saving back to IDB. 
+            // Strip session layer fields before writing to IDB
             const { trackIDSet, playlistID: _sessionAlias, ...cleanPlaylist } = playlist;
-
             console.log(
                 `WorkspaceSession: Writing '${playlist.name}' (id=${playlist.id}) — ${cleanPlaylist.trackIDs.length} tracks`
             );
-
-            // replaceRecord(storeName, key, newData) → objectStore.put({...newData, id: key})
-            // For playlists the IDB keyPath is 'id', so passing playlist.id as the key is correct.
-            savePromises.push(
-                this._dataManager.replaceRecord("playlists", playlist.id, cleanPlaylist)
-            );
+            await this.dataManager.replaceRecord("playlists", playlist.id, cleanPlaylist)
         }
-
-        await Promise.all(savePromises);//Await all saves together so execution doesnt rely on each save completing before starting the next. 
-        // Ensure modifiedPlaylists is only cleared once all saves succeed.
-        this.modifiedPlaylists.clear();//TODO consolidate logic between here and workspace, so save display has a single source of truth?
+        this.modifiedPlaylists.clear();
         console.log("WorkspaceSession: Save complete");
+    }
+
+    // Write pending playlists, patch objects with real IDB IDs, and clear pending list.
+    // Called by save() before writing modified playlists, ensuring new playlists have a valid IDB ID.
+    async resolvePendingPlaylists() {
+
+        // Patch live in-memory objects with real IDB IDs so workspace.js refs stay valid without a reload.
+        for (const pl of this.pendingPlaylists) {
+
+            //Get temp ID and set up raw playlist object. (reduce to standard data model fields)
+            const oldTempID = pl.playlistID;
+            const rawPl = { type: "playlist", name: pl.name, trackIDs: [...pl.trackIDs] };//Need to enforce playlist type here?
+
+            // Get real ID from IDB upon writing, patch into live object.
+            const realId = await this.dataManager.createRecord("playlists", rawPl);
+            pl.id = realId;
+            pl.playlistID = String(realId);
+
+            // Remove old reference to temp ID from modifiedPlaylists and pendingPlaylists.
+            this.modifiedPlaylists.delete(oldTempID);
+            this.pendingPlaylists = this.pendingPlaylists.filter(p => p.playlistID !== oldTempID); // remove from pending list
+            console.log(`WorkspaceSession: Created '${pl.name}' (id=${realId})`);
+        }
+        this.pendingPlaylists = [];
     }
 }
 
