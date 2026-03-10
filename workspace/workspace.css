@@ -6,6 +6,7 @@
     --color-header-table:#222;
     --color-row:         #333;
     --color-row-hover:   #444;
+    --color-row-selected:#555;
     --color-checkbox-row-hover: #7f9181;
     --color-border:      #000;
     --color-text:        #ccc;
@@ -223,8 +224,8 @@ button:hover:not(:disabled) {
     gap: 8px;
 }
 
-/* Playlist header dropdown trigger */
-.pl-menu-btn {
+/* Menu dropdown trigger */
+.menu-dropdown-btn {
     padding: 2px 6px;
     font-size: var(--font-size-controls);
     margin-left: 6px;
@@ -234,35 +235,34 @@ button:hover:not(:disabled) {
     cursor: pointer;
 }
 
-/* Playlist header dropdown trigger hover */
-.pl-menu-btn:hover:not(:disabled) {
+/* Menu dropdown trigger hover */
+.menu-dropdown-btn:hover:not(:disabled) {
     color: var(--color-text);
     background: var(--color-row-hover);
     text-decoration: none;
 }
 
-
-
-/* Playlist dropdown panel */
-.pl-dropdown {
+/* Menu dropdown panel */
+.menu-dropdown {
+    position: fixed;
     background-color: var(--color-row);
     border: var(--standard-border);
     min-width: 180px;
     z-index: 1000;
     box-shadow: 0 4px 12px rgba(0,0,0,0.5);
 }
-.pl-dropdown ul {
+.menu-dropdown ul{
     list-style: none;
     margin: 0;
     padding: 4px 0;
 }
-.pl-dropdown li {
+.menu-dropdown li{
     padding: 7px 14px;
     cursor: pointer;
     font-size: var(--font-size-controls);
     color: var(--color-text);
 }
-.pl-dropdown li:hover:not(.dropdown-item--stub):not(.dropdown-divider) {
+.menu-dropdown li:hover:not(.dropdown-item--stub):not(.dropdown-divider) {
     background-color: var(--color-row-hover);
 }
 .dropdown-item--stub {
@@ -272,7 +272,7 @@ button:hover:not(:disabled) {
 }
 .dropdown-divider {
     border-top: 1px solid var(--color-border);
-    margin: 4px 0;
+    margin: 2px 0;
     padding: 0;
     cursor: default;
 }
@@ -407,6 +407,16 @@ tbody .checkbox-cell:hover {
     background-color: var(--color-checkbox-row-hover);
     transition: background-color var(--transition-fast);
     cursor: pointer;
+}
+
+
+
+/* Track selection */
+#workspace-table tbody tr[data-track-id].selected,
+#workspace-table tbody tr[data-track-id].selected:hover {
+    background-color: var(--color-row-selected);
+    /* outline: 1px solid var(--color-green); */
+    /* outline-offset: -1px;  */
 }
 
 /* Scroll Sentinel - triggers loading when reached */

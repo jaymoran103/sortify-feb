@@ -118,6 +118,27 @@ export class WorkspaceSession {
         if (pendingIdx !== -1) this.pendingPlaylists.splice(pendingIdx, 1);
     }
 
+    // Remove a track from the workspace session entirely: removes from all playlists, then removes object from tracks store in memory
+    // FUTURE: Add some "orphaned tracks" feature in the dashboard to see tracks no longer represented in any playlist? For ease of use, and avoiding inaccessible data we don't need to keep around
+    removeTrackFromWorkspace(trackID) {
+        // Remove track from all playlists in the session
+        for (const playlist of this.playlists) {
+            if (playlist.trackIDSet.has(trackID)) {
+                playlist.trackIDs = playlist.trackIDs.filter(id => id !== trackID);
+                playlist.trackIDSet.delete(trackID);
+                this.modifiedPlaylists.add(playlist.playlistID);
+            }
+        }
+        
+        // Remove track from in-memory tracks lookup
+        if (this.tracks[trackID]) {
+            delete this.tracks[trackID];
+            console.log(`WorkspaceSession: Track '${trackID}' removed from tracks lookup`);
+        } else {
+            console.warn(`WorkspaceSession: removeTrackFromWorkspace: no track found for ID '${trackID}'`);
+        }
+    }
+
     // Rename a playlist in-memory. Updates in IDB on next save()
     renamePlaylist(playlistID, newName) {
         const playlist = this.playlists.find(p => p.playlistID === playlistID);
@@ -167,6 +188,10 @@ export class WorkspaceSession {
         this.pendingPlaylists.push(newPl);
         return newPl;
     }
+
+
+
+
 
     // Toggle track membership in a playlist. (replaces logic in handleCheckboxToggle, which calls this)
     // playlistId: string which should match playlist.playlistID

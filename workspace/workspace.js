@@ -27,6 +27,9 @@ let activeDropdown = null; // currently open dropdown panel, or null if none ope
 let filterCounterElement; // set by initFilterCounter(), 
 let scrollObserver;       // set by initScrollObserver()
 
+//Selection state: stored trackID of currently selected row
+let selectedTrackID = null; 
+
 async function init() {
 
     // Read session created by the dashboard before navigating here
@@ -151,11 +154,34 @@ function renderTableHeader(){
         nameSpan.textContent = playlist.name;
 
         const menuBtn = document.createElement("button");
-        menuBtn.className = "pl-menu-btn";
+        menuBtn.className = "menu-dropdown-btn";
         menuBtn.textContent = "▾";//FUTURE: Standardize dropdown look to match sort control?
         menuBtn.addEventListener("click", (e) => {
             e.stopPropagation(); // prevent document click handler from immediately closing this dropdown
-            openPlaylistDropdown(playlist.playlistID, menuBtn);
+
+            // Use menuBtn coordinates to determine coordinates for dropdown.
+            const rect = menuBtn.getBoundingClientRect();
+            let dropdownX = rect.left;
+            let dropdownY = rect.bottom;
+
+            openDropdown("playlist", playlist.playlistID, dropdownX, dropdownY);
+        });
+
+        th.addEventListener("click", (e) => {
+            e.stopPropagation(); // prevent document click handler from immediately closing this dropdown
+
+            // Use menuBtn coordinates to determine coordinates for dropdown.
+            const rect = menuBtn.getBoundingClientRect();
+            let dropdownX = rect.left;
+            let dropdownY = rect.bottom;
+
+            openDropdown("playlist", playlist.playlistID, dropdownX, dropdownY);
+        });
+
+        th.addEventListener("contextmenu", (e) => {
+            e.preventDefault();
+            const { clientX, clientY } = e;
+            openDropdown("playlist", playlist.playlistID, clientX, clientY);
         });
 
         th.appendChild(nameSpan);
@@ -241,8 +267,36 @@ function renderNextBatch() {
 }
 
 // Helper method creates a display row for a given trackID.
+
+
 function createTrackRow(trackID, displayIndex){
     const row = document.createElement("tr");
+
+    // Store trackID on row for selection lookup and re-application.
+    row.dataset.trackId = trackID;
+
+    // Re-apply selected class if this row was previously selected, ensuring selection renders again
+    if (trackID === selectedTrackID) {
+        row.classList.add("selected");
+    }
+
+    // Select row on click, but not when the user is toggling a checkbox cell.
+    row.addEventListener("click", (e) => {
+        if (e.target.closest(".checkbox-cell")) return;
+        handleTrackRowClick(trackID, row);
+        console.log(`Row clicked for trackID ${trackID} - ${tracks[trackID] ? tracks[trackID].title : "Unknown Track"}`); // Debug log to verify click handlingRow click detected: ')
+    });
+
+    // Open track dropdown on right-click.
+    row.addEventListener("contextmenu", (e) => {
+        e.preventDefault();
+        //Determine coordinates 
+        const { clientX, clientY } = e;
+        // Open dropdown anchored to click coordinates
+        openDropdown("track",trackID,clientX,clientY);
+    });
+        
+
 
     //Index cell. Expects 1-based displayIndex, rather than actual position in displayList.
     const indexCell = document.createElement("td");
@@ -462,14 +516,28 @@ function updateFilterCounter(matchCount) {
 function collectTrackIDsInOrder(playlists){
     const seen = new Set();
     const allTrackIDs = [];
-    //Iterate through playlists in order, pushing not yet seen trackIDs to the array.
-    for (const playlist of playlists) {
-        for (const tid of playlist.trackIDs) {
-            //If not seen yet, add to seen and push to allTrackIDs. Specific playlist membership is determined later by checkboxes.
-            if (!seen.has(tid)) {
-                seen.add(tid);
-                allTrackIDs.push(tid);
+
+    //Hack to disable playlist-determined order for the default sort, which makes the UI jumpy when playlist membership changes. Should probably only change when sort/filter is selected. FUTURE: revise caching/ordering flow to access some master list of tracks, updated only when the tracks set itself changes?
+    const PLAYLISTS_DETERMINE_ORDER = false; 
+    if (PLAYLISTS_DETERMINE_ORDER){
+        //Iterate through playlists in order, pushing not yet seen trackIDs to the array.
+        for (const playlist of playlists) {
+            for (const tid of playlist.trackIDs) {
+                //If not seen yet, add to seen and push to allTrackIDs. Specific playlist membership is determined later by checkboxes.
+                if (!seen.has(tid)) {
+                    seen.add(tid);
+                    allTrackIDs.push(tid);
+                }
             }
+        }
+    }
+
+    // Iterate through all tracks, adding any not included in playlists. Skipping the block above ensures a more consistent 'default' sort, since objects have a consistent iteration order for keys.
+    // for (const tid of Object.keys(tracks)) {
+    for (const tid in tracks) {
+        if (!seen.has(tid)) {
+            seen.add(tid);
+            allTrackIDs.push(tid);
         }
     }
     return allTrackIDs;
@@ -509,11 +577,11 @@ function setupEventListeners() {
     });
 
     // Close dropdown on outside click. 
-    document.addEventListener("click", () => closePlaylistDropdown());
+    document.addEventListener("click", () => closeDropdown());
 
     // Close dropdown on Escape
     document.addEventListener("keydown", (e) => {
-        if (e.key === "Escape") closePlaylistDropdown();
+        if (e.key === "Escape") closeDropdown();
     });
 }
 
@@ -574,10 +642,14 @@ async function handleSave() {
     }
 }
 
-// Dropdown Behavior - FUTURE: Refactor handlers to separate class?
+/** ===============
+ *  DROPDOWN LOGIC
+ *  ===============
+ * FUTURE: Extract to separate module
+ */
 
-// Close any open dropdown by removing from dom. Skips if no dropdown is open 
-function closePlaylistDropdown() {
+// Close any open dropdown by removing from DOM. Skips if no dropdown is open 
+function closeDropdown() {
     if (activeDropdown) {
         activeDropdown.remove();
         activeDropdown = null;
@@ -585,40 +657,106 @@ function closePlaylistDropdown() {
 }
 
 // Build and open a dropdown for the given playlistID, anchored to a given button element.
-function openPlaylistDropdown(playlistID, anchorButton) {
+// NOTE: Given id must correspond with the mode, which determine dropdown items and actions in buildDropdownPanel.  
+function openDropdown(mode=null,id,x,y) {
 
     // Close existing dropdown if open, then build new dropdown panel for the given playlistID.
-    closePlaylistDropdown();
-    const panel = buildDropdownPanel(playlistID);
+    closeDropdown();
 
-    // Position below the anchor button using fixed coords to avoid table overflow issues
-    const rect = anchorButton.getBoundingClientRect();
-    panel.style.position = "fixed";
-    panel.style.top  = rect.bottom + "px";
-    panel.style.left = rect.left + "px";
+    let panel = buildDropdownPanel(id, mode);
+
+    //Exit if invalid mode given
+    if (!panel) {
+        console.error("Invalid dropdown mode or issue building dropdown:", mode);
+        return;
+    }
+
+    //NOTE: Previously determined dropdown coordinates from given anchorElement, now receives specific coodinates from caller
+
+    // If dropdown is too close to the right edge of the viewport, adjust x to prevent overflow. Similar for bottom edge and y coordinate.
+    const rect = panel.getBoundingClientRect();
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
+
+    if (x + rect.width > viewportWidth) {
+        x = viewportWidth - rect.width - 10; // 10px padding from edge
+    }
+    if (y + rect.height > viewportHeight) {
+        y = viewportHeight - rect.height - 10; // 10px padding from edge
+    }
+
+    //Once coordinates are finalized, set panel position and append to body. 
+    panel.style.left = `${x}px`;
+    panel.style.top = `${y}px`;
 
     document.body.appendChild(panel);
     activeDropdown = panel;
 }
 
-// Build and return a dropdown panel for the given playlistID
-function buildDropdownPanel(playlistID) {
-    const panel = document.createElement("div");
-    panel.className = "pl-dropdown";
 
+// Build and return a dropdown panel for the given playlistID
+// NOTE: be careful handling ids, especially after multi-track case is implemented.
+// FUTURE: Probably refactoring mode approach once UI logic is more fleshed out and separated.
+function buildDropdownPanel(id,mode) {
+
+    //Create div element for dropdown panel, which will be positioned and populated with items based on the given playlistID and mode.
+    const panel = document.createElement("div");
+    panel.className = "menu-dropdown";
+
+    //Determine dropdown items based on mode and ID. Rest of the logic should be consistent
+    let items = null;
+    switch (mode){
+        case "playlist":
+            // panel.className = "pl-dropdown";
+
+            const playlistID = id;
+            items = [
+                { label: "Select all Tracks",            action: () => handleBulkMembershipUpdate(playlistID, true) },
+                { label: "Deselect all Tracks",          action: () => handleBulkMembershipUpdate(playlistID, false) },
+                { divider: true },
+                { label: "Rename Playlist",                action: () => handleRenamePlaylist(playlistID) },
+                { label: "Duplicate Playlist",             action: () => handleDuplicatePlaylist(playlistID) },
+                { divider: true },
+                { label: "Remove from workspace", action: () => handleRemovePlaylist(playlistID) },//Use same wording as 
+            ];
+            break;
+        case "track":
+            // panel.className = "tr-dropdown";
+
+            const trackID = id;
+            items = [
+                { label: "Add to all Playlists",            action: () => handleAddTrackToAll(trackID)}, 
+                { label: "Remove from all Playlists",       action: () => handleRemoveTrackFromAll(trackID)}, 
+                { divider: true },
+                { label: "Delete Track from workspace", action: () => handleDeleteTrack(trackID)}, 
+                { divider: true },
+                //Fine as long as all tracks are from the same source, not especially important or useful going forward
+                { label: "Open in Spotify",       action: () => handleOpenInSpotify(trackID)}, 
+                { label: "Copy Track ID",         action: () => handleCopyTrackID(trackID)},
+            ];
+            break;
+        // case "multi-track":
+            // panel.className = "tr-dropdown";
+            //trackIDs = id; // in this case, id is an array of trackIDs
+            // items = [
+            //     { label: "Select all",            action: () => methodName(trackIDs, true) },
+            // ];
+            // break;
+        // default:
+        //     console.error("Invalid dropdown mode:", mode);
+        //     return null;
+    }
+
+    //If switch failed to set items or panel class, log error and exit.
+    if (!items || panel.className === "") {
+        console.error("Failed to build dropdown panel: invalid mode or items not defined.", {id, mode, items});
+        return null;
+    }
+    
     // Prevent outside click listener from immediately closing this panel
     panel.addEventListener("click", (e) => e.stopPropagation());
 
     const ul = document.createElement("ul");
-
-    const items = [
-        { label: "Select all",            action: () => handleBulkMembershipUpdate(playlistID, true) },
-        { label: "Deselect all",          action: () => handleBulkMembershipUpdate(playlistID, false) },
-        // { divider: true },
-        { label: "Rename",                action: () => handleRenamePlaylist(playlistID) },
-        { label: "Duplicate",             action: () => handleDuplicatePlaylist(playlistID) },
-        { label: "Remove from workspace", action: () => handleRemovePlaylist(playlistID) },
-    ];
 
     // For each item, create an li element. If it's a divider, add the divider class. Otherwise, set text and click handler to trigger the corresponding action and close the dropdown.
     for (const item of items) {
@@ -628,7 +766,7 @@ function buildDropdownPanel(playlistID) {
         } else {
             li.textContent = item.label;
             li.addEventListener("click", () => {
-                closePlaylistDropdown();
+                closeDropdown();
                 item.action();
             });
         }
@@ -639,7 +777,11 @@ function buildDropdownPanel(playlistID) {
     return panel;
 }
 
-// Dropdown Action Handlers
+/** ===============
+ *  ACTION HANDLERS
+ *  ===============
+ * FUTURE: Extract to separate module?
+ */
 
 // Handler for select/deselect all - updates membership of each shown track in a playlist to match desired state.
 // Operates on the full filtered set of trackIDs, not just the currently rendered page. 
@@ -681,6 +823,112 @@ function handleRenamePlaylist(playlistID) {
     updateSaveStatus();
 }
 
+// Handler for removing a playlist from the workspace.
+function handleRemovePlaylist(playlistID) {
+    session.removePlaylist(playlistID);
+    resetLoadedRows();
+    renderWorkspaceTable();
+    updateSaveStatus();
+}
+
+//Handler for duplicating a playlist within the workspace. 
+function handleDuplicatePlaylist(playlistID) {
+    session.duplicatePlaylist(playlistID);  
+    resetLoadedRows();
+    renderWorkspaceTable();
+    updateSaveStatus();
+}
+
+// Add the selected track to every playlist that doesn't already contain it.
+function handleAddTrackToAll(trackID) {
+    for (const playlist of playlists) {
+        if (!playlist.trackIDSet.has(trackID)) {
+            session.toggleTrack(playlist.playlistID, trackID);
+        }
+    }
+    wipeCaches();
+    resetLoadedRows();
+    renderTableBody();
+    updateSaveStatus();
+}
+
+
+// Remove the selected track from every playlist that contains it.
+function handleRemoveTrackFromAll(trackID) {
+    for (const playlist of playlists) {
+        if (playlist.trackIDSet.has(trackID)) {
+            session.toggleTrack(playlist.playlistID, trackID);
+        }
+    }
+    wipeCaches();
+    resetLoadedRows();
+    renderTableBody();
+    updateSaveStatus();
+}
+
+
+// Remove the selected track from all playlists and remove its row from the table.
+function handleDeleteTrack(trackID) {
+    session.removeTrackFromWorkspace(trackID);
+    wipeCaches();
+    resetLoadedRows();
+    renderWorkspaceTable();
+    updateSaveStatus();
+}
+
+// Handler for opening a track in Spotify. Validates track ID format before attempting to open.
+function handleOpenInSpotify(trackID) {
+    if (trackID.startsWith("spotify:track:")){
+        // NOTE: Very dependent on my client settings, not a permanent feature or solution
+        window.location.href = trackID; //Open directly in window, links right to app 
+
+        // window.open(`https://open.spotify.com/track/${trackID.split(":").pop()}`, "_blank");
+        // window.open(trackID);
+        return;
+    }
+    alert("Track ID does not appear to be a Spotify track URI, cannot open in Spotify.");
+}
+
+function handleCopyTrackID(trackID) {
+    navigator.clipboard.writeText(trackID).then(() => {
+        console.log(`Track ID ${trackID} copied to clipboard.`);
+    }).catch(err => {
+        console.error("Failed to copy track ID:", err);
+    });
+}
+
+
+// Toggle selection on the clicked row. Deselects if already selected, shifts selection otherwise.
+function handleTrackRowClick(trackID, rowEl) {
+    console.log(`handleTrackRowClick: trackID=${trackID}, currently selected=${selectedTrackID}`);
+    if (selectedTrackID === trackID) {
+        // Deselect
+        rowEl.classList.remove("selected");
+        console.log("Row already selected, deselecting");
+        // clearSelection();
+        selectedTrackID = null;
+    } else {
+        // Deselect previous row if one is selected
+
+        if (selectedTrackID) {
+            console.log(`Deselecting old row: trackID=${selectedTrackID}`);
+
+            const prev = document.querySelector(`tr[data-track-id="${selectedTrackID}"]`);
+            if (prev) prev.classList.remove("selected");
+        }
+        // Select new row
+        console.log(`Selecting new row: trackID=${trackID}`);
+        selectedTrackID = trackID;
+        rowEl.classList.add("selected");
+    }
+}
+
+
+
+
+//TODO: Group add/create playlist methods with other control handlers?
+
+// Handler for adding an existing playlist to the workspace by ID. Prompts for playlist ID, validates it, then attempts to load it into the session and re-render if successful.
 function handleAddPlaylist() {
     // FUTURE: If live playlist adding remains a feature, implement proper selector UI for playlists. Can probably share logic with dashboard UI once its redone.
     const input = window.prompt("Enter playlist ID to add:");
@@ -702,23 +950,7 @@ function handleAddPlaylist() {
     });
 }
 
-// Handler for removing a playlist from the workspace.
-function handleRemovePlaylist(playlistID) {
-    session.removePlaylist(playlistID);
-    resetLoadedRows();
-    renderWorkspaceTable();
-    updateSaveStatus();
-}
-
-//Handler for duplicating a playlist within the workspace. 
-function handleDuplicatePlaylist(playlistID) {
-    session.duplicatePlaylist(playlistID);  
-    resetLoadedRows();
-    renderWorkspaceTable();
-    updateSaveStatus();
-}
-
-// Handler for creating a new empty playlist.
+// Handler for creating a new empty playlist. Prompts for playlist name, validates it, then creates the playlist in the session and re-renders if successful.
 function handleCreateEmptyPlaylist() {
     const name = window.prompt("New playlist name:");
 
