@@ -27,8 +27,9 @@ let activeDropdown = null; // currently open dropdown panel, or null if none ope
 let filterCounterElement; // set by initFilterCounter(), 
 let scrollObserver;       // set by initScrollObserver()
 
-//Selection state: stored trackID of currently selected row
-let selectedTrackID = null; 
+//Selection state: stored trackID(s) of currently selected row(s), and index of last clicked row for shift-click range selection.
+let selectedTrackIDs = new Set();
+let lastClickedTrackIndex = null;
 
 async function init() {
 
@@ -156,6 +157,8 @@ function renderTableHeader(){
         const menuBtn = document.createElement("button");
         menuBtn.className = "menu-dropdown-btn";
         menuBtn.textContent = "▾";//FUTURE: Standardize dropdown look to match sort control?
+
+        //Listener for menu button: opens dropdown
         menuBtn.addEventListener("click", (e) => {
             e.stopPropagation(); // prevent document click handler from immediately closing this dropdown
 
@@ -167,17 +170,19 @@ function renderTableHeader(){
             openDropdown("playlist", playlist.playlistID, dropdownX, dropdownY);
         });
 
-        th.addEventListener("click", (e) => {
-            e.stopPropagation(); // prevent document click handler from immediately closing this dropdown
+        //Listener for basic click on header cell: opens dropdown
+        // th.addEventListener("click", (e) => {
+        //     e.stopPropagation(); // prevent document click handler from immediately closing this dropdown
 
-            // Use menuBtn coordinates to determine coordinates for dropdown.
-            const rect = menuBtn.getBoundingClientRect();
-            let dropdownX = rect.left;
-            let dropdownY = rect.bottom;
+        //     // Use menuBtn coordinates to determine coordinates for dropdown.
+        //     const rect = menuBtn.getBoundingClientRect();
+        //     let dropdownX = rect.left;
+        //     let dropdownY = rect.bottom;
 
-            openDropdown("playlist", playlist.playlistID, dropdownX, dropdownY);
-        });
+        //     openDropdown("playlist", playlist.playlistID, dropdownX, dropdownY);
+        // });
 
+        //Listener for right-click on header cell: opens dropdown
         th.addEventListener("contextmenu", (e) => {
             e.preventDefault();
             const { clientX, clientY } = e;
@@ -276,15 +281,14 @@ function createTrackRow(trackID, displayIndex){
     row.dataset.trackId = trackID;
 
     // Re-apply selected class if this row was previously selected, ensuring selection renders again
-    if (trackID === selectedTrackID) {
+    if (selectedTrackIDs.has(trackID)) {
         row.classList.add("selected");
     }
 
     // Select row on click, but not when the user is toggling a checkbox cell.
     row.addEventListener("click", (e) => {
         if (e.target.closest(".checkbox-cell")) return;
-        handleTrackRowClick(trackID, row);
-        console.log(`Row clicked for trackID ${trackID} - ${tracks[trackID] ? tracks[trackID].title : "Unknown Track"}`); // Debug log to verify click handlingRow click detected: ')
+        handleTrackRowClick(trackID, row, row.sectionRowIndex, e);
     });
 
     // Open track dropdown on right-click.
@@ -292,8 +296,15 @@ function createTrackRow(trackID, displayIndex){
         e.preventDefault();
         //Determine coordinates 
         const { clientX, clientY } = e;
+
+        // If the right-clicked row isn't already selected, select it and deselect any others.
+        if (!selectedTrackIDs.has(trackID)) {
+            selectedTrackIDs.clear();
+            selectedTrackIDs.add(trackID);
+        }
+
         // Open dropdown anchored to click coordinates
-        openDropdown("track",trackID,clientX,clientY);
+        openDropdown("track",selectedTrackIDs,clientX,clientY);
     });
         
 
@@ -563,6 +574,11 @@ function setupEventListeners() {
             handleCheckboxToggle(e.target);
         }
     });
+
+    // Prevent shift+click from triggering browser text selection (must intercept mousedown, not click)
+    document.getElementById("table-body").addEventListener("mousedown", (e) => {
+        if (e.shiftKey) e.preventDefault();
+    });
     
     //Make all checkbox cells clickable by toggling the checkbox when the cell is clicked, (unless the click is directly on the checkbox)
     //FUTURE consider using custom component or styling to make the entire cell function as a checkbox, rather than this workaround.
@@ -579,9 +595,16 @@ function setupEventListeners() {
     // Close dropdown on outside click. 
     document.addEventListener("click", () => closeDropdown());
 
-    // Close dropdown on Escape
+    // Keyboard shortcuts: Escape closes dropdown; Cmd+A / Ctrl+A selects all tracks
     document.addEventListener("keydown", (e) => {
-        if (e.key === "Escape") closeDropdown();
+        if (e.key === "Escape") {
+            closeDropdown();
+            clearSelection();
+        }
+        if ((e.metaKey || e.ctrlKey) && e.key === "a") {
+            e.preventDefault(); // prevent browser "select all text"
+            handleCmdA();
+        }
     });
 }
 
@@ -657,11 +680,26 @@ function closeDropdown() {
 }
 
 // Build and open a dropdown for the given playlistID, anchored to a given button element.
-// NOTE: Given id must correspond with the mode, which determine dropdown items and actions in buildDropdownPanel.  
+// NOTE: Be careful with use of id in future refactors, can mean multiple things based on mode/usage
 function openDropdown(mode=null,id,x,y) {
 
     // Close existing dropdown if open, then build new dropdown panel for the given playlistID.
     closeDropdown();
+
+    //If opening a track dropdown and multiple tracks are selected, set mode to track-multi to trigger different dropdown options. 
+
+    // If opening a track dropdown, ensure at least one track is selected.
+    // If multiple are selected, set mode accordingly.
+    // contextmenu listener for track rows ensures a selection if a dropdown opens for an unselected track.
+    if (mode=="track"){
+        if (selectedTrackIDs.size==0){
+            console.warn("Attempted to open track dropdown with no selected tracks. Aborting.");
+            return;
+        }
+        else if (selectedTrackIDs.size > 1){
+            mode = "track-multi";
+        }
+    }
 
     let panel = buildDropdownPanel(id, mode);
 
@@ -707,8 +745,6 @@ function buildDropdownPanel(id,mode) {
     let items = null;
     switch (mode){
         case "playlist":
-            // panel.className = "pl-dropdown";
-
             const playlistID = id;
             items = [
                 { label: "Select all Tracks",            action: () => handleBulkMembershipUpdate(playlistID, true) },
@@ -721,38 +757,33 @@ function buildDropdownPanel(id,mode) {
             ];
             break;
         case "track":
-            // panel.className = "tr-dropdown";
-
-            const trackID = id;
+            //NOTE: most track actions currently don't expect an id, since handlers reference selectedTrackIDs directly. 
             items = [
-                { label: "Add to all Playlists",            action: () => handleAddTrackToAll(trackID)}, 
-                { label: "Remove from all Playlists",       action: () => handleRemoveTrackFromAll(trackID)}, 
+                { label: "Add to all Playlists",            action: () => handleAddTrackToAll()}, 
+                { label: "Remove from all Playlists",       action: () => handleRemoveTrackFromAll()}, 
                 { divider: true },
-                { label: "Delete Track from workspace", action: () => handleDeleteTrack(trackID)}, 
+                { label: "Delete Track from workspace", action: () => handleDeleteTrack()}, 
                 { divider: true },
+                //These two rely on "track" mode only opening when one track is selected (Caller openDropdown updates it to track-multi if multiple tracks are selected)
                 //Fine as long as all tracks are from the same source, not especially important or useful going forward
-                { label: "Open in Spotify",       action: () => handleOpenInSpotify(trackID)}, 
-                { label: "Copy Track ID",         action: () => handleCopyTrackID(trackID)},
+                { label: "Open in Spotify",       action: () => handleOpenInSpotify([...selectedTrackIDs][0])}, 
+                { label: "Copy Track ID",         action: () => handleCopyTrackID([...selectedTrackIDs][0])},
             ];
             break;
-        // case "multi-track":
-            // panel.className = "tr-dropdown";
-            //trackIDs = id; // in this case, id is an array of trackIDs
-            // items = [
-            //     { label: "Select all",            action: () => methodName(trackIDs, true) },
-            // ];
-            // break;
-        // default:
-        //     console.error("Invalid dropdown mode:", mode);
-        //     return null;
+        case "track-multi":
+            //NOTE: most track actions currently don't expect an id, since handlers reference selectedTrackIDs directly. 
+            items = [
+                { label: `Add ${selectedTrackIDs.size} tracks to all Playlists`,            action: () => handleAddTrackToAll()}, 
+                { label: `Remove ${selectedTrackIDs.size} tracks from all Playlists`,       action: () =>  handleRemoveTrackFromAll()}, 
+                { divider: true },
+                { label: `Delete ${selectedTrackIDs.size} tracks from workspace`, action: () => handleDeleteTrack()},
+            ];
+            break;
+        default:
+            console.error("Invalid dropdown mode:", mode);
+            return null;
     }
 
-    //If switch failed to set items or panel class, log error and exit.
-    if (!items || panel.className === "") {
-        console.error("Failed to build dropdown panel: invalid mode or items not defined.", {id, mode, items});
-        return null;
-    }
-    
     // Prevent outside click listener from immediately closing this panel
     panel.addEventListener("click", (e) => e.stopPropagation());
 
@@ -839,11 +870,32 @@ function handleDuplicatePlaylist(playlistID) {
     updateSaveStatus();
 }
 
-// Add the selected track to every playlist that doesn't already contain it.
-function handleAddTrackToAll(trackID) {
-    for (const playlist of playlists) {
-        if (!playlist.trackIDSet.has(trackID)) {
-            session.toggleTrack(playlist.playlistID, trackID);
+// Add all selected track(s) to every playlist that doesn't already contain it/them.
+function handleAddTrackToAll() {
+
+    for (const trackID of selectedTrackIDs) {
+        for (const playlist of playlists) {
+            if (!playlist.trackIDSet.has(trackID)) {
+                session.toggleTrack(playlist.playlistID, trackID);
+            }
+        }
+    }
+    
+    wipeCaches();//TODO need this here?
+    resetLoadedRows();
+    renderTableBody();
+    updateSaveStatus();
+}
+
+
+
+// Remove all selected tracks from every playlist that contains them.
+function handleRemoveTrackFromAll() {
+    for (const trackID of selectedTrackIDs) {
+        for (const playlist of playlists) {
+            if (playlist.trackIDSet.has(trackID)) {
+                session.toggleTrack(playlist.playlistID, trackID);
+            }
         }
     }
     wipeCaches();
@@ -853,31 +905,21 @@ function handleAddTrackToAll(trackID) {
 }
 
 
-// Remove the selected track from every playlist that contains it.
-function handleRemoveTrackFromAll(trackID) {
-    for (const playlist of playlists) {
-        if (playlist.trackIDSet.has(trackID)) {
-            session.toggleTrack(playlist.playlistID, trackID);
-        }
+// Remove all selected tracks from all playlists and their rows from the table.
+function handleDeleteTrack() {
+    for (const trackID of selectedTrackIDs) {
+        session.removeTrackFromWorkspace(trackID);
     }
-    wipeCaches();
-    resetLoadedRows();
-    renderTableBody();
-    updateSaveStatus();
-}
-
-
-// Remove the selected track from all playlists and remove its row from the table.
-function handleDeleteTrack(trackID) {
-    session.removeTrackFromWorkspace(trackID);
     wipeCaches();
     resetLoadedRows();
     renderWorkspaceTable();
     updateSaveStatus();
 }
 
+
 // Handler for opening a track in Spotify. Validates track ID format before attempting to open.
 function handleOpenInSpotify(trackID) {
+    console.log(trackID)
     if (trackID.startsWith("spotify:track:")){
         // NOTE: Very dependent on my client settings, not a permanent feature or solution
         window.location.href = trackID; //Open directly in window, links right to app 
@@ -898,28 +940,27 @@ function handleCopyTrackID(trackID) {
 }
 
 
-// Toggle selection on the clicked row. Deselects if already selected, shifts selection otherwise.
-function handleTrackRowClick(trackID, rowEl) {
-    console.log(`handleTrackRowClick: trackID=${trackID}, currently selected=${selectedTrackID}`);
-    if (selectedTrackID === trackID) {
-        // Deselect
-        rowEl.classList.remove("selected");
-        console.log("Row already selected, deselecting");
-        // clearSelection();
-        selectedTrackID = null;
-    } else {
-        // Deselect previous row if one is selected
-
-        if (selectedTrackID) {
-            console.log(`Deselecting old row: trackID=${selectedTrackID}`);
-
-            const prev = document.querySelector(`tr[data-track-id="${selectedTrackID}"]`);
-            if (prev) prev.classList.remove("selected");
+// Route row click to appropriate selection behavior based on modifier keys.
+function handleTrackRowClick(trackID, rowEl, index, event) {
+    if (event.shiftKey) {
+        handleShiftClick(index, trackID, rowEl);
+    } else if (event.metaKey || event.ctrlKey) {
+        // Cmd/Ctrl+click: toggle this track individually
+        if (selectedTrackIDs.has(trackID)) {
+            deselectTrack(trackID, rowEl);
+        } else {
+            selectTrack(trackID, rowEl);
         }
-        // Select new row
-        console.log(`Selecting new row: trackID=${trackID}`);
-        selectedTrackID = trackID;
-        rowEl.classList.add("selected");
+        lastClickedTrackIndex = index;
+    } else {
+        // Plain click: exclusive select — clear all others first
+        for (const id of selectedTrackIDs) {
+            const row = document.querySelector(`tr[data-track-id="${id}"]`);
+            if (row) row.classList.remove("selected");
+        }
+        clearSelection();
+        selectTrack(trackID, rowEl);
+        lastClickedTrackIndex = index;
     }
 }
 
@@ -969,6 +1010,74 @@ function handleCreateEmptyPlaylist() {
 function wipeCaches() {
     cachedTrackIDsOrder = null;
     cachedFilteredIDs = null;
+}
+
+
+
+
+// Clears all selected rows: strips .selected from the DOM, clears the Set, resets anchor index.
+function clearSelection() {
+    for (const id of selectedTrackIDs) {
+        const row = document.querySelector(`tr[data-track-id="${id}"]`);
+        if (row) row.classList.remove("selected");
+    }
+    selectedTrackIDs.clear();
+    lastClickedTrackIndex = null;
+}
+
+// Add a track to the selection and mark its row.
+function selectTrack(trackID, rowEl) {
+    selectedTrackIDs.add(trackID);
+    if (rowEl) rowEl.classList.add("selected");
+    lastClickedTrackIndex = displayList.indexOf(trackID);//TODO need this?
+}
+
+// Remove a track from the selection and unmark its row.
+function deselectTrack(trackID, rowEl) {
+    selectedTrackIDs.delete(trackID);
+    if (rowEl) rowEl.classList.remove("selected");
+}
+
+
+
+// Select/deselect a contiguous range from lastClickedTrackIndex to currentIndex.
+// Range follows anchor row's state: selects if anchor is selected, deselects if not.
+function handleShiftClick(currentIndex, currentTrackID, rowEl) {
+    if (lastClickedTrackIndex === null) {
+        // No anchor yet — fall back to plain single select
+        clearSelection();
+        selectTrack(currentTrackID, rowEl);
+        lastClickedTrackIndex = currentIndex;
+        return;
+    }
+    const tbody = document.getElementById("table-body");
+    const anchorRow = tbody.rows[lastClickedTrackIndex];
+    const anchorSelected = anchorRow ? selectedTrackIDs.has(anchorRow.dataset.trackId) : false;
+    const lo = Math.min(lastClickedTrackIndex, currentIndex);
+    const hi = Math.max(lastClickedTrackIndex, currentIndex);
+    for (let i = lo; i <= hi; i++) {
+        const row = tbody.rows[i];
+        if (!row || !row.dataset.trackId) continue;
+        if (anchorSelected) {
+            selectTrack(row.dataset.trackId, row);
+        } else {
+            deselectTrack(row.dataset.trackId, row);
+        }
+    }
+    // Shift+click doesn't move the anchor — lastClickedTrackIndex stays put
+}
+
+
+// Select all tracks in the current filtered+sorted set, across all pages.
+function handleCmdA() {
+    cachedTrackIDsOrder ??= collectTrackIDsInOrder(playlists);
+    const allIDs = sortTrackIDs(filterTrackIDs(cachedTrackIDsOrder, currentFilter), currentSort);
+    for (const id of allIDs) selectedTrackIDs.add(id);
+    // Mark all currently rendered rows
+    const tbody = document.getElementById("table-body");
+    for (const row of tbody.querySelectorAll("tr[data-track-id]")) {
+        if (selectedTrackIDs.has(row.dataset.trackId)) row.classList.add("selected");
+    }
 }
 
 

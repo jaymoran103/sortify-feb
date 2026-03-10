@@ -1,3 +1,4 @@
+
 /* Shared styling */
 :root {
     /* Colors */
@@ -308,6 +309,7 @@ button:hover:not(:disabled) {
     border-collapse: collapse;
     width: 100%;
     table-layout: fixed;
+    user-select: none; /* prevent text selection on shift-click / Cmd+A */
 }
 
 /* Shared table styling */
@@ -322,6 +324,7 @@ button:hover:not(:disabled) {
 
 #workspace-table tr {
     background-color: var(--color-row);
+    user-select: none;
 }
 
 #workspace-table th {
@@ -342,6 +345,15 @@ button:hover:not(:disabled) {
 #workspace-table tbody tr:hover {
     background-color: var(--color-row-hover);
 }
+
+/* Track selection */
+#workspace-table tbody tr[data-track-id].selected,
+#workspace-table tbody tr[data-track-id].selected:hover {
+    background-color: var(--color-row-selected);
+    /* outline: 1px solid var(--color-green); */
+    /* outline-offset: -1px;  */
+}
+
 
 /* Index column - fixed width, doesn't wrap */
 /* FUTURE: widen if track count exceeds 1000 or 10k?*/
@@ -411,13 +423,6 @@ tbody .checkbox-cell:hover {
 
 
 
-/* Track selection */
-#workspace-table tbody tr[data-track-id].selected,
-#workspace-table tbody tr[data-track-id].selected:hover {
-    background-color: var(--color-row-selected);
-    /* outline: 1px solid var(--color-green); */
-    /* outline-offset: -1px;  */
-}
 
 /* Scroll Sentinel - triggers loading when reached */
 #scroll-sentinel {
