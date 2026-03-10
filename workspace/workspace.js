@@ -281,7 +281,7 @@ function createTrackRow(trackID, displayIndex){
     row.dataset.trackId = trackID;
 
     // Re-apply selected class if this row was previously selected, ensuring selection renders again
-    if (selectedTrackIDs.has(trackID)) {
+    if (isTrackSelected(trackID)) {
         row.classList.add("selected");
     }
 
@@ -298,16 +298,14 @@ function createTrackRow(trackID, displayIndex){
         const { clientX, clientY } = e;
 
         // If the right-clicked row isn't already selected, select it and deselect any others.
-        if (!selectedTrackIDs.has(trackID)) {
-            selectedTrackIDs.clear();
-            selectedTrackIDs.add(trackID);
+        if (!isTrackSelected(trackID)) {
+            clearSelection();
+            selectTrack(trackID, row);
         }
 
         // Open dropdown anchored to click coordinates
         openDropdown("track",selectedTrackIDs,clientX,clientY);
     });
-        
-
 
     //Index cell. Expects 1-based displayIndex, rather than actual position in displayList.
     const indexCell = document.createElement("td");
@@ -946,7 +944,7 @@ function handleTrackRowClick(trackID, rowEl, index, event) {
         handleShiftClick(index, trackID, rowEl);
     } else if (event.metaKey || event.ctrlKey) {
         // Cmd/Ctrl+click: toggle this track individually
-        if (selectedTrackIDs.has(trackID)) {
+        if (isTrackSelected(trackID)) {
             deselectTrack(trackID, rowEl);
         } else {
             selectTrack(trackID, rowEl);
@@ -963,11 +961,6 @@ function handleTrackRowClick(trackID, rowEl, index, event) {
         lastClickedTrackIndex = index;
     }
 }
-
-
-
-
-//TODO: Group add/create playlist methods with other control handlers?
 
 // Handler for adding an existing playlist to the workspace by ID. Prompts for playlist ID, validates it, then attempts to load it into the session and re-render if successful.
 function handleAddPlaylist() {
@@ -1029,7 +1022,6 @@ function clearSelection() {
 function selectTrack(trackID, rowEl) {
     selectedTrackIDs.add(trackID);
     if (rowEl) rowEl.classList.add("selected");
-    lastClickedTrackIndex = displayList.indexOf(trackID);//TODO need this?
 }
 
 // Remove a track from the selection and unmark its row.
@@ -1038,6 +1030,10 @@ function deselectTrack(trackID, rowEl) {
     if (rowEl) rowEl.classList.remove("selected");
 }
 
+// Check if a track is currently selected. Returns a boolean.
+function isTrackSelected(trackID) { 
+    return selectedTrackIDs.has(trackID);
+}
 
 
 // Select/deselect a contiguous range from lastClickedTrackIndex to currentIndex.
@@ -1052,7 +1048,7 @@ function handleShiftClick(currentIndex, currentTrackID, rowEl) {
     }
     const tbody = document.getElementById("table-body");
     const anchorRow = tbody.rows[lastClickedTrackIndex];
-    const anchorSelected = anchorRow ? selectedTrackIDs.has(anchorRow.dataset.trackId) : false;
+    const anchorSelected = anchorRow ? isTrackSelected(anchorRow.dataset.trackId) : false;
     const lo = Math.min(lastClickedTrackIndex, currentIndex);
     const hi = Math.max(lastClickedTrackIndex, currentIndex);
     for (let i = lo; i <= hi; i++) {
@@ -1070,13 +1066,22 @@ function handleShiftClick(currentIndex, currentTrackID, rowEl) {
 
 // Select all tracks in the current filtered+sorted set, across all pages.
 function handleCmdA() {
-    cachedTrackIDsOrder ??= collectTrackIDsInOrder(playlists);
-    const allIDs = sortTrackIDs(filterTrackIDs(cachedTrackIDsOrder, currentFilter), currentSort);
-    for (const id of allIDs) selectedTrackIDs.add(id);
-    // Mark all currently rendered rows
+
+    //Determine filtered id set by accessing caches or recomputing.
+    const filteredIDs = cachedFilteredIDs ??= filterTrackIDs(       
+        cachedTrackIDsOrder ??= collectTrackIDsInOrder(playlists),
+        currentFilter
+    );
+
+    // Add all filtered IDs to the selection set
+    for (const id of filteredIDs) {
+        selectedTrackIDs.add(id);
+    }
+
+    // Add .selected class to all rows in the current filtered set. 
     const tbody = document.getElementById("table-body");
     for (const row of tbody.querySelectorAll("tr[data-track-id]")) {
-        if (selectedTrackIDs.has(row.dataset.trackId)) row.classList.add("selected");
+        row.classList.add("selected");
     }
 }
 
