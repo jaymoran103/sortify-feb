@@ -11,8 +11,15 @@
 
         <!-- Header with title, navigation and save controls -->
         <header id="workspace-header">
+
             <h1>Playlist Workspace</h1>
-            <button id="back-btn">Back to Dashboard</button>
+
+            <div id="save-controls">
+                <span id="save-status"></span>
+                <button id="save-btn" disabled>Save</button>
+                <button id="back-btn"> Back to Dashboard</button>
+
+            </div>
         </header>
 
         <!-- Progress bar for load operations -->
@@ -27,10 +34,7 @@
                 <button id="add-playlist-btn">+ Add playlist</button>
                 <button id="new-playlist-btn">+ New playlist</button>
             </div>
-            <div id="save-controls">
-                <span id="save-status"></span>
-                <button id="save-btn" disabled>Save</button>
-            </div>
+            
         </div>
 
         <!-- Main workspace area -->

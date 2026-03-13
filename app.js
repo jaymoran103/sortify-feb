@@ -22,6 +22,7 @@ class AppIteration2{
         document.getElementById("clearStorageButton").addEventListener("click", this.handleClearStorage.bind(this));
 
         document.getElementById("importButton").addEventListener("click", this.handleImport.bind(this));
+        document.getElementById("exportButton").addEventListener("click", this.handleExport.bind(this));
         document.getElementById("open-workspace-all-btn").addEventListener("click", this.handleOpenWorkspaceAll.bind(this));
         document.getElementById("open-workspace-select-btn").addEventListener("click", this.handleOpenWorkspaceSelect.bind(this));
     }
@@ -223,6 +224,10 @@ class AppIteration2{
         console.log(`  Total tracks processed: ${this.importer.totalTracksProcessed}`);
         console.log(`  Unique tracks added: ${this.importer.uniqueTracksAdded}`);
         console.log(`  Invalid tracks skipped: ${this.importer.invalidTracksSkipped}`);
+    }
+
+    async handleExport(){
+        console.log("Export button clicked - not yet implemented");
     }
 
     //Gets all playlists from database, rendering a table for each.

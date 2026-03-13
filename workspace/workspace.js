@@ -145,18 +145,36 @@ function renderTableHeader(){
     titleTh.textContent = "TRACK";
     row.appendChild(titleTh);
 
-    // One column per playlist, with name span + dropdown trigger button
+    // One column per playlist, with name, track count, and dropdown button
     for (const playlist of playlists) {
+
+        // Create header cell with dataset playlistID for reference in dropdown handlers
         const th = document.createElement("th");
         th.className = "checkbox-cell";
         th.dataset.playlistID = playlist.playlistID;
 
+        // Header structure: stack name + track count on the left, with triangle button to the right
+        const headerInner = document.createElement("div");
+        headerInner.className = "playlist-th-inner";
+
+        const textContainer = document.createElement("div");
+        textContainer.className = "playlist-th-text";
+
         const nameSpan = document.createElement("span");
+        nameSpan.className = "playlist-th-name";
         nameSpan.textContent = playlist.name;
+
+        const countSpan = document.createElement("span");
+        countSpan.className = "playlist-th-count";
+        const trackCount = playlist.trackIDs.length;
+        countSpan.textContent = `${trackCount} track${trackCount !== 1 ? "s" : ""}`;
+
+        textContainer.appendChild(nameSpan);
+        textContainer.appendChild(countSpan);
 
         const menuBtn = document.createElement("button");
         menuBtn.className = "menu-dropdown-btn";
-        menuBtn.textContent = "▾";//FUTURE: Standardize dropdown look to match sort control?
+        // menuBtn.textContent = "▾"; // text content replaced by CSS ::after to match sort dropdown styling
 
         //Listener for menu button: opens dropdown
         menuBtn.addEventListener("click", (e) => {
@@ -170,27 +188,16 @@ function renderTableHeader(){
             openDropdown("playlist", playlist.playlistID, dropdownX, dropdownY);
         });
 
-        //Listener for basic click on header cell: opens dropdown
-        // th.addEventListener("click", (e) => {
-        //     e.stopPropagation(); // prevent document click handler from immediately closing this dropdown
-
-        //     // Use menuBtn coordinates to determine coordinates for dropdown.
-        //     const rect = menuBtn.getBoundingClientRect();
-        //     let dropdownX = rect.left;
-        //     let dropdownY = rect.bottom;
-
-        //     openDropdown("playlist", playlist.playlistID, dropdownX, dropdownY);
-        // });
-
-        //Listener for right-click on header cell: opens dropdown
+        //Listener for right-click on header cell: also opens dropdown
         th.addEventListener("contextmenu", (e) => {
             e.preventDefault();
             const { clientX, clientY } = e;
             openDropdown("playlist", playlist.playlistID, clientX, clientY);
         });
 
-        th.appendChild(nameSpan);
-        th.appendChild(menuBtn);
+        headerInner.appendChild(textContainer);
+        headerInner.appendChild(menuBtn);
+        th.appendChild(headerInner);
         row.appendChild(th);
     }
 
@@ -450,7 +457,7 @@ function initSortControl() {
     
     //Wrapper for label and sort dropdown, facilitates dropdown styling
     const wrapper = document.createElement("div");
-    wrapper.className = "sort-select-wrapper";
+    wrapper.className = "dropdown-button-wrapper";
 
     //Label for sort dropdown
     const label = document.createElement("label");
@@ -709,23 +716,14 @@ function openDropdown(mode=null,id,x,y) {
 
     //NOTE: Previously determined dropdown coordinates from given anchorElement, now receives specific coodinates from caller
 
-    // If dropdown is too close to the right edge of the viewport, adjust x to prevent overflow. Similar for bottom edge and y coordinate.
-    const rect = panel.getBoundingClientRect();
-    const viewportWidth = window.innerWidth;
-    const viewportHeight = window.innerHeight;
-
-    if (x + rect.width > viewportWidth) {
-        x = viewportWidth - rect.width - 10; // 10px padding from edge
-    }
-    if (y + rect.height > viewportHeight) {
-        y = viewportHeight - rect.height - 10; // 10px padding from edge
-    }
-
-    //Once coordinates are finalized, set panel position and append to body. 
-    panel.style.left = `${x}px`;
-    panel.style.top = `${y}px`;
-
+    // Append hidden first so getBoundingClientRect() returns real dimensions, then clamp to viewport.
+    panel.style.cssText = "visibility:hidden;left:0;top:0";
     document.body.appendChild(panel);
+    const { width, height } = panel.getBoundingClientRect();
+    x = Math.min(x, window.innerWidth  - width  - 10);
+    y = Math.min(y, window.innerHeight - height - 10);
+    panel.style.cssText = `left:${x}px;top:${y}px`;
+
     activeDropdown = panel;
 }
 
