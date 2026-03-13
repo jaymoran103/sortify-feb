@@ -2,9 +2,7 @@
     <head>
         <meta charset="utf-8">
         <title>Playlist Workspace</title>
-        <!-- Standalone styling, no dependencies for now.
-         Will extract styling to root once workspace is fleshed out -->
-
+        <link rel="stylesheet" href="../shared/base.css">
         <link rel="stylesheet" href="workspace.css">
     </head>
     <body>
@@ -17,15 +15,21 @@
             <div id="save-controls">
                 <span id="save-status"></span>
                 <button id="save-btn" disabled>Save</button>
-                <button id="back-btn"> Back to Dashboard</button>
-
             </div>
+            <button id="back-btn" onclick="window.location.href='../'"> Back to Dashboard</button> <!-- onclick here so navigation doesn't rely on JS-->
         </header>
 
         <!-- Progress bar for load operations -->
         <div id="progress-bar"></div> <!-- FUTURE: Consider a wheel indicator when revising dashboard -->
 
-        <!-- Control bar facilitating table manipulation -->
+
+        <!-- Error state: shown when session loading fails. Message injected by showSessionError() -->
+        <div id="session-error" hidden>
+            <p id="session-error-message">An error occurred.</p>
+            <a href="../">Back to Dashboard</a>
+        </div>
+
+        <!-- Control bar for table manipulation -->
         <div id="control-bar">
             <div id="sort-controls"></div>
             <div id="search-controls"></div>
@@ -34,7 +38,6 @@
                 <button id="add-playlist-btn">+ Add playlist</button>
                 <button id="new-playlist-btn">+ New playlist</button>
             </div>
-            
         </div>
 
         <!-- Main workspace area -->

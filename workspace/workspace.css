@@ -1,39 +1,8 @@
 
-/* Shared styling */
-:root {
-    /* Colors */
-    --color-bg:          #212121;
-    --color-header-page: #222;
-    --color-header-table:#222;
-    --color-row:         #333;
-    --color-row-hover:   #444;
-    --color-row-selected:#555;
-    --color-checkbox-row-hover: #7f9181;
-    --color-border:      #000;
-    --color-text:        #ccc;
-    --color-text-muted:  #888;
-    --color-button-text: #000;
+/* Workspace-specific styles. Tokens and global resets are in shared/base.css */
 
-    --color-green:       rgb(65, 137, 56);
-    --color-green-hover: rgb(46, 198, 79);
-    --color-disabled:    rgb(120, 120, 120);
 
-    /* Fonts */
-    --font-family: sans-serif;
-    --font-size-base: 1em;
-    --font-size-controls: 0.9em;
-    --font-size-button: 0.85em;
-    --font-size-metadata: 0.9em;
-
-    /* Other */
-    --transition-fast: 150ms ease;
-    --standard-border: 2px solid var(--color-border);
-
-}
-
-*, *::before, *::after {
-    box-sizing: border-box;
-}
+/* ========== BASE ELEMENTS ========== */
 
 body {
     display: flex;
@@ -44,42 +13,17 @@ body {
     overflow: hidden;
     background-color: var(--color-bg);
     font-family: var(--font-family);
-
     color: var(--color-text);
 }
 
-/* Page Header */
-#workspace-header {
-    display: flex;
-    align-items: center;
-    gap: 20px;
-    padding: 10px 20px;
-    background-color: var(--color-header-page);
-    flex-shrink: 0;
-    border-bottom: var(--standard-border);
-    height: 60px;
-
-}
-
-#workspace-header h1 {
-    flex: 1;
-    margin: 0;
-    font-size: 1.5rem;
-}
-
-
-/* Button styling */
 button {
     background-color: var(--color-green);
     color: var(--color-button-text);
-    /* padding: 10px 20px; */
     cursor: pointer;
     transition: background-color var(--transition-fast), font-weight var(--transition-fast);
-    height: 32px; /* Same height as control bar elements, make this standard higher up the chain?*/
+    height: 32px;
     vertical-align: middle;
     font-size: var(--font-size-button);
-   
-
 }
 button:disabled {
     background-color: var(--color-disabled);
@@ -92,19 +36,42 @@ button:hover:not(:disabled) {
 }
 
 
+/* ========== PAGE STRUCTURE ========== */
 
-/* Control bar */
-#control-bar {
+/* Page Header */
+#workspace-header {
     display: flex;
-    /* align-items: center; */
-    gap: 16px;
-    padding: 8px 16px;
+    align-items: center;
+    gap: 20px;
+    padding: 10px 20px;
     background-color: var(--color-header-page);
-    border-bottom: var(--standard-border);
     flex-shrink: 0;
+    border-bottom: var(--standard-border);
+    height: 60px;
 }
 
-/* Progress bar */
+#workspace-header h1 {
+    flex: 1;
+    margin: 0;
+    font-size: 1.5rem;
+}
+
+/* Save Controls */
+#save-controls {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-left: auto;
+}
+
+#save-status {
+    color: var(--color-text-muted);
+    font-size: var(--font-size-controls);
+    width: 190px;
+    text-align: right;
+}
+
+/* Progress Bar */
 /* FUTURE: support determinate mode via --progress custom property + width: calc(var(--progress,0)*1%) */
 #progress-bar {
     width: 100%;
@@ -134,14 +101,42 @@ button:hover:not(:disabled) {
     100% { transform: translateX(333%); }
 }
 
-/* Common height for controls */
-#sort-controls select,
-#search-controls input[type="search"] {
-    height: 32px;
+/* Session error state — shown in place of workspace-container when session loading fails */
+#session-error {
+    /* display: none; */
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    padding: 40px;
+    text-align: center;
+}
+#session-error p {
+    font-size: 1.1em;
+    color: red;
+    margin: 0;
+}
+#session-error a {
+    /* color: var(--color-text); */
+    color: var(--color-green-hover);/* Do we want green here? */
+
+}
+
+/* ========== CONTROL BAR ========== */
+
+#control-bar {
+    display: flex;
+    /* align-items intentionally omitted — allows controls to align to top if bar wraps */
+    gap: 16px;
+    padding: 8px 16px;
+    background-color: var(--color-header-page);
+    border-bottom: var(--standard-border);
+    flex-shrink: 0;
 }
 
 /* Sort Controls */
-
 #sort-controls {
     display: flex;
     align-items: center;
@@ -158,22 +153,20 @@ button:hover:not(:disabled) {
     color: var(--color-text);
     border: var(--standard-border);
     padding: 4px 8px;
+    height: 32px;
     cursor: pointer;
-    font-family: var(--font-family);
     font-size: var(--font-size-controls);
     border-radius: 2px;
-    /* Override default appearance */
     appearance: none;
     padding-right: 25px;
 }
 
-.dropdown-button-wrapper {
+/* CSS triangle arrow for sort dropdown button*/
+.sort-button-wrapper {
     position: relative;
     display: inline-block;
 }
-
-/* Sort Dropdown arrow */
-.dropdown-button-wrapper::after {
+.sort-button-wrapper::after {
     content: '';
     position: absolute;
     right: 8px;
@@ -191,23 +184,20 @@ button:hover:not(:disabled) {
     display: flex;
     align-items: center;
     gap: 8px;
-    /* margin-left: auto; */
 }
-
 #search-controls input[type="search"] {
     background-color: var(--color-row);
     color: var(--color-text);
     border: var(--standard-border);
     padding: 4px 8px;
+    height: 32px;
     width: 220px;
-    font-family: var(--font-family);
     font-size: var(--font-size-controls);
 }
 #search-controls input[type="search"]::placeholder {
     color: var(--color-text-muted);
 }
 
-/* Filter counter */
 #filter-counter {
     font-size: var(--font-size-controls);
     color: var(--color-text-muted);
@@ -219,8 +209,7 @@ button:hover:not(:disabled) {
     display: flex;
 }
 
-
-/* Playlist management buttons in control bar */
+/* Playlist Controls */
 #playlist-controls {
     display: flex;
     align-items: center;
@@ -228,77 +217,10 @@ button:hover:not(:disabled) {
     margin-left: auto;
 }
 
-/* Playlist column header: name + count stacked, with button flush right */
-.playlist-th-inner {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 6px;
-}
 
-.playlist-th-text {
-    display: flex;
-    flex-direction: column;
-    min-width: 0;
-    flex: 1;
-    text-align: left;
-}
+/* ========== DROPDOWN COMPONENTS ========== */
 
-.playlist-th-name {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-
-.playlist-th-count {
-    font-size: 0.75em;
-    font-weight: normal;
-    color: var(--color-text-muted);
-    margin-top: 1px;
-}
-
-/* Menu dropdown trigger */
-.menu-dropdown-btn {
-    flex-shrink: 0;
-    position: relative;
-    width: 24px;
-    height: 24px;
-    padding: 0;
-    background: transparent;
-    color: var(--color-text-muted);
-    border: 1px solid var(--color-text-muted);
-    border-radius: 2px;
-    cursor: pointer;
-    appearance: none;
-    font-size: var(--font-size-controls);
-}
-
-/* CSS triangle arrow — matches sort dropdown style */
-.menu-dropdown-btn::after {
-    content: '';
-    position: absolute;
-    left: 50%;
-    top: 50%;
-    transform: translate(-50%, -50%);
-    width: 0;
-    height: 0;
-    border-left: 4px solid transparent;
-    border-right: 4px solid transparent;
-    border-top: 5px solid var(--color-text-muted);
-    pointer-events: none;
-}
-
-/* Menu dropdown trigger hover */
-.menu-dropdown-btn:hover:not(:disabled) {
-    border-color: var(--color-text);
-    background: var(--color-row-hover);
-}
-
-.menu-dropdown-btn:hover:not(:disabled)::after {
-    border-top-color: var(--color-text);
-}
-
-/* Menu dropdown panel */
+/* Dropdown panel */
 .menu-dropdown {
     position: fixed;
     background-color: var(--color-row);
@@ -307,12 +229,12 @@ button:hover:not(:disabled) {
     z-index: 1000;
     box-shadow: 0 4px 12px rgba(0,0,0,0.5);
 }
-.menu-dropdown ul{
+.menu-dropdown ul {
     list-style: none;
     margin: 0;
     padding: 4px 0;
 }
-.menu-dropdown li{
+.menu-dropdown li {
     padding: 7px 14px;
     cursor: pointer;
     font-size: var(--font-size-controls);
@@ -333,33 +255,51 @@ button:hover:not(:disabled) {
     cursor: default;
 }
 
-
-/* Save Controls */
-#save-controls {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    margin-left: auto;
-}
-
-#save-status {
+/* Trigger button for playlist column context menus */
+.menu-dropdown-btn {
+    flex-shrink: 0;
+    position: relative;
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    background: transparent;
     color: var(--color-text-muted);
+    border: 1px solid var(--color-text-muted);
+    border-radius: 2px;
+    cursor: pointer;
+    appearance: none;
     font-size: var(--font-size-controls);
-    width: 190px;
-    text-align: right;
+}
+/* CSS triangle arrow for playlist dropdown button*/
+.menu-dropdown-btn::after {
+    content: '';
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    width: 0;
+    height: 0;
+    border-left: 4px solid transparent;
+    border-right: 4px solid transparent;
+    border-top: 5px solid var(--color-text-muted);
+    pointer-events: none;
+}
+.menu-dropdown-btn:hover:not(:disabled) {
+    border-color: var(--color-text);
+    background: var(--color-row-hover);
+}
+.menu-dropdown-btn:hover:not(:disabled)::after {
+    border-top-color: var(--color-text);
 }
 
+/* ========== WORKSPACE TABLE ========== */
 
-
-
-/* Scrollable workspace area */
 #workspace-container {
     flex: 1;
     overflow: auto;
     padding: 0;
 }
 
-/* Table */
 #workspace-table {
     border-collapse: collapse;
     width: 100%;
@@ -367,7 +307,7 @@ button:hover:not(:disabled) {
     user-select: none; /* prevent text selection on shift-click / Cmd+A */
 }
 
-/* Shared table styling */
+/* Basic header, cell, row styling */
 #workspace-table th,
 #workspace-table td {
     border: var(--standard-border);
@@ -375,13 +315,11 @@ button:hover:not(:disabled) {
     color: var(--color-text);
     vertical-align: middle;
 }
-
-
 #workspace-table tr {
     background-color: var(--color-row);
-    user-select: none;
 }
 
+/* Table Header */
 #workspace-table th {
     background-color: var(--color-header-table);
     font-weight: 600;
@@ -393,25 +331,24 @@ button:hover:not(:disabled) {
     box-shadow: inset 0 -2px 0 var(--color-border);
 }
 
+/* Track Hover: highlight with delay */
 #workspace-table tbody tr {
     transition: background-color var(--transition-fast);
 }
-
 #workspace-table tbody tr:hover {
     background-color: var(--color-row-hover);
 }
 
-/* Track selection */
+/* Track Selection: highlight while selected, overrides hover */
 #workspace-table tbody tr[data-track-id].selected,
 #workspace-table tbody tr[data-track-id].selected:hover {
     background-color: var(--color-row-selected);
-    /* outline: 1px solid var(--color-green); */
-    /* outline-offset: -1px;  */
 }
 
 
-/* Index column - fixed width, doesn't wrap */
-/* FUTURE: widen if track count exceeds 1000 or 10k?*/
+/* ========== TABLE COLUMNS ========== */
+
+/* FUTURE: widen index column if track count exceeds 1000 or 10k */
 .index-cell {
     width: 35px;
     max-width: 40px;
@@ -419,10 +356,9 @@ button:hover:not(:disabled) {
     white-space: nowrap;
 }
 
-/* Track info column — takes remaining space */
+/* Track Info Column */
 .track-info-cell {
     text-align: left;
-
     min-width: 220px;
     width: 220px;
     overflow: hidden;
@@ -430,17 +366,14 @@ button:hover:not(:disabled) {
 
 .track-name {
     font-weight: 600;
-    font-family: var(--font-family);
     font-size: var(--font-size-base);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
 }
 
-
 .track-meta {
-    /* TODO: Differentiate styling for artist vs album?*/
-    font-family: var(--font-family);
+    /* TODO: Differentiate styling for artist vs album? */
     font-size: var(--font-size-metadata);
     color: var(--color-text-muted);
     overflow: hidden;
@@ -452,7 +385,8 @@ button:hover:not(:disabled) {
 .track-meta .sep {
     margin: 0 4px;
 }
-/* Checkbox columns — fixed width */
+
+/* Playlist Columns */
 .checkbox-cell {
     font-size: var(--font-size-base);
     width: 100px;
@@ -462,24 +396,57 @@ button:hover:not(:disabled) {
     overflow: hidden;
     position: relative;
 }
-
 .checkbox-cell input[type="checkbox"] {
     width: 16px;
     height: 16px;
     cursor: pointer;
     accent-color: var(--color-green);
 }
-/* Hover applies to body now, FUTURE - Review more thoroughly once playlist headers have their own click/hover interactions*/
+
+/* FUTURE: add highlight for playlist rows when header is hovered? */
 tbody .checkbox-cell:hover {
     background-color: var(--color-checkbox-row-hover);
     transition: background-color var(--transition-fast);
     cursor: pointer;
 }
 
+/* Playlist column header */
+.playlist-th-inner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px;
+}
+.playlist-th-text {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    flex: 1;
+    text-align: left;
+}
+.playlist-th-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.playlist-th-count {
+    font-size: 0.75em;
+    font-weight: normal;
+    color: var(--color-text-muted);
+    margin-top: 1px;
+}
 
 
+/* ========== MISC ========== */
 
-/* Scroll Sentinel - triggers loading when reached */
+/* Empty table state — shown when filter returns no results or no tracks exist */
+.empty-message-cell {
+    text-align: center;
+    color: var(--color-text-muted);
+    padding: 24px;
+}
+
+/* Scroll sentinel — triggers lazy-loading when reached by the viewport */
 #scroll-sentinel {
     height: 1px;
 }

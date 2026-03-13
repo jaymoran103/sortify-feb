@@ -1,0 +1,54 @@
+/* Base styling, currently just for workspace */
+
+:root {
+    /* Colors */
+    --color-bg:                 #212121;
+    --color-header-page:        #222;
+    --color-header-table:       #222;
+    --color-row:                #333;
+    --color-row-hover:          #444;
+    --color-row-selected:       #555;
+    --color-checkbox-row-hover: #7f9181;
+    --color-border:             #000;
+    --color-text:               #ccc;
+    --color-text-muted:         #888;
+    --color-button-text:        #000;
+
+    --color-green:              rgb(65, 137, 56);/*FUTURE: Green->Accent?*/
+    --color-green-hover:        rgb(46, 198, 79);
+    --color-disabled:           rgb(120, 120, 120);
+
+    /* Fonts */
+    --font-family:        sans-serif;
+    --font-size-base:     1em;
+    --font-size-controls: 0.9em;
+    --font-size-button:   0.85em;
+    --font-size-metadata: 0.9em;
+
+    /* Borders */
+    --standard-border:  2px solid var(--color-border);
+    /* --light-border:     1px solid var(--color-border); */
+    /* --soft-border:     1px solid #222; */
+
+    /* Other */
+    --transition-fast:  150ms ease;
+}
+
+/* Ensure box-sizing globally */
+*,
+*::before,
+*::after {
+    box-sizing: border-box;
+}
+
+/* Ensure the HTML `hidden` attribute always wins over CSS display rules */
+[hidden] {
+    display: none !important;
+}
+
+/* Prevent inputs, selects, and buttons from ignoring the inherited font family */
+select,
+input,
+button {
+    font-family: inherit;
+}

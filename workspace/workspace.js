@@ -90,20 +90,23 @@ async function init() {
     hideProgressBar();
 }
 
-// Display an error message with a link back to the dashboard, used when session loading fails or no valid playlists are found.
+// On session error, display the session-error section with a given message, and hide other workspace elements.
 function showSessionError(message) {
-    const container = document.getElementById("workspace-container");
-    //HTML block feels out of place here. FUTURE: extract to separate html file or workspace ui class.
-    container.innerHTML = `
-        <div style="padding: 40px; text-align: center; color: #ccc;">
-            <p style="font-size: 1.1em; color: red;">
-                error: ${message}
-            </p>
-            <a href="../" style="color: green;">
-                Back to Dashboard
-            </a>
-        </div>
-    `;
+
+    //If no error message provided, warn in console.
+    if (!message){
+        console.error("showSessionError called without message.");
+        message = "An unexpected error occurred.";
+        alert("An unexpected error occurred, make sure error state comes with a message");//FUTURE: Just for development, dont want these to go unseen
+    }
+    // Set error message and show session-error section.
+    document.getElementById("session-error-message").textContent = message ;
+    document.getElementById("session-error").hidden = false;
+    document.getElementById("workspace-container").hidden = true;
+    //Hide controls since they won't function without a valid session, and to avoid confusion in the error state. FUTURE: Consider hiding individual controls instead of the whole bar, or showing a different set of controls relevant to the error state (e.g. retry button if load failed).
+    document.getElementById("save-controls").hidden = true;
+    document.getElementById("control-bar").hidden = true;
+    //FUTURE: Review final page layout, ensuring nothing dependent on valid session/data remains.
 }
 
 // Show and hide the progress bar during async loading operations.
@@ -235,9 +238,7 @@ function renderEmptyTableBody(filteredCount){
     const emptyCell = document.createElement("td");
     
     emptyCell.colSpan = 2 + playlists.length; // index + track info + one per playlist
-    emptyCell.style.textAlign = "center";
-    emptyCell.style.color = "var(--color-text-muted)";
-    emptyCell.style.padding = "24px";
+    emptyCell.className = "empty-message-cell";
 
     //Message indicates whether empty state is due to filtering, or simply no tracks in the selected playlists.
     emptyCell.textContent = (filteredCount === 0)
@@ -457,7 +458,7 @@ function initSortControl() {
     
     //Wrapper for label and sort dropdown, facilitates dropdown styling
     const wrapper = document.createElement("div");
-    wrapper.className = "dropdown-button-wrapper";
+    wrapper.className = "sort-button-wrapper";
 
     //Label for sort dropdown
     const label = document.createElement("label");
@@ -564,9 +565,8 @@ function setupEventListeners() {
 
     //Basic button listeners for save and back.
     document.getElementById("save-btn").addEventListener("click", handleSave);
-    document.getElementById("back-btn").addEventListener("click", () => {
-        window.location.href = "..";//Redirect to dashboard/home page
-    });
+    // click event currently handled by link in workspace.html, enabling navigation independent of JS.
+    // document.getElementById("back-btn").addEventListener("click", () => {window.location.href = "..";//Redirect to dashboard/home page});
 
     // Playlist management buttons
     // FUTURE - Separate section with more controls: reorder, duplicate, create, delete,import/export. Plus shortcut button here for most common, create empty
