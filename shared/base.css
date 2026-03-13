@@ -52,3 +52,74 @@ input,
 button {
     font-family: inherit;
 }
+
+
+/* ========== MODAL ========== */
+/* FUTURE: extract to separate class if base.css accumulates to many components like this */
+.modal-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.6);
+    z-index: 2000;
+    align-items: center;
+    justify-content: center;
+}
+.modal-overlay--visible {
+    display: flex;
+}
+
+.modal {
+    background-color: var(--color-row);
+    border: var(--standard-border);
+    min-width: 320px;
+    max-width: 420px;
+    width: 90%;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    padding: 20px 24px;
+}
+
+.modal__title {
+    margin: 0;
+    font-size: 1.1em;
+    font-weight: 600;
+    color: var(--color-text);
+}
+
+.modal__body {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.modal__input {
+    background-color: var(--color-bg);
+    color: var(--color-text);
+    border: var(--standard-border);
+    padding: 4px 8px;
+    height: 32px;
+    width: 100%;
+    font-size: var(--font-size-controls);
+}
+
+.modal__message {
+    color: var(--color-text);
+    font-size: var(--font-size-controls);
+    margin: 0;
+}
+
+.modal__error {
+    color: #e06c75; /* soft red — FUTURE: add --color-error token */
+    font-size: var(--font-size-controls);
+    margin: 0;
+}
+
+.modal__footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+}
+
+/* FUTURE: .modal__list — scrollable checkbox list for playlist selector modal */

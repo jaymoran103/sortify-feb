@@ -1,4 +1,5 @@
 import WorkspaceSession from "./session.js";
+import { promptModal, notifyModal } from "../shared/modal.js";
 
 const session = new WorkspaceSession();
 // Session state: primarily managed by WorkspaceSession. module-level vars set to live references inside session after load().
@@ -97,7 +98,7 @@ function showSessionError(message) {
     if (!message){
         console.error("showSessionError called without message.");
         message = "An unexpected error occurred.";
-        alert("An unexpected error occurred, make sure error state comes with a message");//FUTURE: Just for development, dont want these to go unseen
+        alert("An unexpected error occurred, make sure error state comes with a message");//FUTURE: Just for development, dont want these to go unseen. //NOTE: Dont replace with modal, can't rely on any JS.
     }
 
     // Set error message and show session-error section.
@@ -838,17 +839,25 @@ function handleBulkMembershipUpdate(playlistID, desiredState) {
     updateSaveStatus();
 }
 
-// Handler for renaming a playlist. Prompts for new name, then updates session and re-renders header to reflect change.
-function handleRenamePlaylist(playlistID) {
+// Handler for renaming a playlist. Opens a modal to get new name, validates inline, then updates session and re-renders.
+async function handleRenamePlaylist(playlistID) {
     const playlist = playlists.find(p => p.playlistID === playlistID);
     if (!playlist) return;
-    const newName = window.prompt("Rename playlist:", playlist.name);
 
-    // Validate input: return early for undefined, empty, or whitespace-only names, as well as unchanged name.
-    if (!newName || !newName.trim() || newName.trim() === playlist.name) return;
+    const newName = await promptModal({
+        title: "Rename Playlist",
+        confirmLabel: "Rename",
+        defaultValue: playlist.name,
+        //TODO extract to separate method? Simpler here until parameters are more consistent. Strategy pattern with validation functions for each case?        // validate:[notEmpty,noSpecialChars,unique,nameChanged(defaultValue)]
+        validate: (value) => {
+            if (!value) return "Name cannot be empty.";
+            if (value === playlist.name) return "Name is unchanged.";
+            return null;
+        }
+    });
+    if (!newName) return;
 
-    //If valid, update name in session, then update display to reflect change.
-    session.renamePlaylist(playlistID, newName.trim());
+    session.renamePlaylist(playlistID, newName);
     renderWorkspaceTable();
     updateSaveStatus();
 }
@@ -918,16 +927,19 @@ function handleDeleteTrack() {
 
 // Handler for opening a track in Spotify. Validates track ID format before attempting to open.
 function handleOpenInSpotify(trackID) {
-    console.log(trackID)
-    if (trackID.startsWith("spotify:track:")){
+    console.log(trackID);
+    if (trackID.startsWith("spotify:track:")) {
         // NOTE: Very dependent on my client settings, not a permanent feature or solution
         window.location.href = trackID; //Open directly in window, links right to app 
-
         // window.open(`https://open.spotify.com/track/${trackID.split(":").pop()}`, "_blank");
         // window.open(trackID);
         return;
     }
-    alert("Track ID does not appear to be a Spotify track URI, cannot open in Spotify.");
+    notifyModal({
+        title: "Cannot Open in Spotify",
+        message: "Track ID does not appear to be a Spotify track URI.",
+        confirmLabel: "OK"
+    });
 }
 
 function handleCopyTrackID(trackID) {
@@ -963,38 +975,46 @@ function handleTrackRowClick(trackID, rowEl, index, event) {
     }
 }
 
-// Handler for adding an existing playlist to the workspace by ID. Prompts for playlist ID, validates it, then attempts to load it into the session and re-render if successful.
-function handleAddPlaylist() {
-    // FUTURE: If live playlist adding remains a feature, implement proper selector UI for playlists. Can probably share logic with dashboard UI once its redone.
-    const input = window.prompt("Enter playlist ID to add:");
+// Handler for adding an existing playlist to the workspace by ID. Opens a modal for input with inline validation, then loads and re-renders.
+// FUTURE: Replace with a playlist selector modal showing a scrollable list of available playlists with checkboxes. Use same logic as dashboard playlist selector. Validate by comparing to existing playlists in workspace?
+async function handleAddPlaylist() {
+    const input = await promptModal({
+        title: "Add Playlist",
+        confirmLabel: "Add",
+        placeholder: "Playlist ID (number)",
+        validate: (value) => {
+            const id = Number(value);
+            return (Number.isInteger(id) && id > 0) ? null : "Enter a valid numeric playlist ID.";
+        }
+    });
     if (!input) return;
 
-    //Validate input: return early if not a valid, positive integer.
-    const id = Number(input);
-    if (!Number.isInteger(id) || id <= 0) {
-        alert("Please enter a valid numeric playlist ID.");
+    const selectedPlaylist = await session.addPlaylist(Number(input));//Enforce numeric type here. Non permanent approach
+    if (!selectedPlaylist) {
+        await notifyModal({
+            title: "Not Found",
+            message: "Playlist not found or already in workspace.",
+            confirmLabel: "OK"
+        });
         return;
     }
 
-    //If valid, attempt to add playlist to session. 
-    session.addPlaylist(id).then(pl => {
-        if (!pl) { alert("Playlist not found or already in workspace."); return; }
-        resetLoadedRows();
-        renderWorkspaceTable();
-        updateSaveStatus();
-    });
+    resetLoadedRows();
+    renderWorkspaceTable();
+    updateSaveStatus();
 }
 
-// Handler for creating a new empty playlist. Prompts for playlist name, validates it, then creates the playlist in the session and re-renders if successful.
-function handleCreateEmptyPlaylist() {
-    const name = window.prompt("New playlist name:");
+// Handler for creating a new empty playlist. Opens a modal to get the name, validates inline, then creates and re-renders.
+async function handleCreateEmptyPlaylist() {
+    const name = await promptModal({
+        title: "New Playlist",
+        confirmLabel: "Create",
+        placeholder: "Playlist name",
+        validate: (value) => value ? null : "Name cannot be empty."
+    });
+    if (!name) return;
 
-    // Validate input: return early for undefined, empty, or whitespace-only names.
-    if (!name || !name.trim()) return;
-
-    // If valid, create new empty playlist in session, re-render workspace, and update save status to reflect new playlist.
-    session.createEmptyPlaylist(name.trim());
-
+    session.createEmptyPlaylist(name);
     resetLoadedRows();
     renderWorkspaceTable();
     updateSaveStatus();
