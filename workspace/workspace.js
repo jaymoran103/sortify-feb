@@ -99,10 +99,12 @@ function showSessionError(message) {
         message = "An unexpected error occurred.";
         alert("An unexpected error occurred, make sure error state comes with a message");//FUTURE: Just for development, dont want these to go unseen
     }
+
     // Set error message and show session-error section.
     document.getElementById("session-error-message").textContent = message ;
     document.getElementById("session-error").hidden = false;
     document.getElementById("workspace-container").hidden = true;
+
     //Hide controls since they won't function without a valid session, and to avoid confusion in the error state. FUTURE: Consider hiding individual controls instead of the whole bar, or showing a different set of controls relevant to the error state (e.g. retry button if load failed).
     document.getElementById("save-controls").hidden = true;
     document.getElementById("control-bar").hidden = true;
@@ -111,12 +113,12 @@ function showSessionError(message) {
 
 // Show and hide the progress bar during async loading operations.
 async function showProgressBar() {
-    document.getElementById("progress-bar").classList.add("loading");
+    document.getElementById("progress-bar").classList.add("progress-bar--loading");
     await yieldForPaint(); // Ensure the progress bar is visible before continuing with loading.
 }
 
 function hideProgressBar() {
-    document.getElementById("progress-bar").classList.remove("loading");
+    document.getElementById("progress-bar").classList.remove("progress-bar--loading");
 }
 
 // Returns promise that resolves on next paint, allowing UI updates to render before continuing with time-consuming operations.
@@ -138,13 +140,13 @@ function renderTableHeader(){
 
     //Column for track indices
     const indexTh = document.createElement("th");
-    indexTh.className = "index-cell";
+    indexTh.className = "track-table__index";
     indexTh.textContent = "#";
     row.appendChild(indexTh);
 
     //Column for track info (currently combined). might add toggleable columns later for more metadata
     const titleTh = document.createElement("th");
-    titleTh.className = "track-info-cell";
+    titleTh.className = "track-table__info";
     titleTh.textContent = "TRACK";
     row.appendChild(titleTh);
 
@@ -153,22 +155,22 @@ function renderTableHeader(){
 
         // Create header cell with dataset playlistID for reference in dropdown handlers
         const th = document.createElement("th");
-        th.className = "checkbox-cell";
+        th.className = "track-table__checkbox";
         th.dataset.playlistID = playlist.playlistID;
 
         // Header structure: stack name + track count on the left, with triangle button to the right
         const headerInner = document.createElement("div");
-        headerInner.className = "playlist-th-inner";
+        headerInner.className = "playlist-col__header";
 
         const textContainer = document.createElement("div");
-        textContainer.className = "playlist-th-text";
+        textContainer.className = "playlist-col__text";
 
         const nameSpan = document.createElement("span");
-        nameSpan.className = "playlist-th-name";
+        nameSpan.className = "playlist-col__name";
         nameSpan.textContent = playlist.name;
 
         const countSpan = document.createElement("span");
-        countSpan.className = "playlist-th-count";
+        countSpan.className = "playlist-col__count";
         const trackCount = playlist.trackIDs.length;
         countSpan.textContent = `${trackCount} track${trackCount !== 1 ? "s" : ""}`;
 
@@ -176,7 +178,7 @@ function renderTableHeader(){
         textContainer.appendChild(countSpan);
 
         const menuBtn = document.createElement("button");
-        menuBtn.className = "menu-dropdown-btn";
+        menuBtn.className = "dropdown__trigger";
         // menuBtn.textContent = "▾"; // text content replaced by CSS ::after to match sort dropdown styling
 
         //Listener for menu button: opens dropdown
@@ -238,7 +240,7 @@ function renderEmptyTableBody(filteredCount){
     const emptyCell = document.createElement("td");
     
     emptyCell.colSpan = 2 + playlists.length; // index + track info + one per playlist
-    emptyCell.className = "empty-message-cell";
+    emptyCell.className = "track-table__empty";
 
     //Message indicates whether empty state is due to filtering, or simply no tracks in the selected playlists.
     emptyCell.textContent = (filteredCount === 0)
@@ -290,12 +292,12 @@ function createTrackRow(trackID, displayIndex){
 
     // Re-apply selected class if this row was previously selected, ensuring selection renders again
     if (isTrackSelected(trackID)) {
-        row.classList.add("selected");
+        row.classList.add("track-row--selected");
     }
 
     // Select row on click, but not when the user is toggling a checkbox cell.
     row.addEventListener("click", (e) => {
-        if (e.target.closest(".checkbox-cell")) return;
+        if (e.target.closest(".track-table__checkbox")) return;
         handleTrackRowClick(trackID, row, row.sectionRowIndex, e);
     });
 
@@ -317,13 +319,13 @@ function createTrackRow(trackID, displayIndex){
 
     //Index cell. Expects 1-based displayIndex, rather than actual position in displayList.
     const indexCell = document.createElement("td");
-    indexCell.className = "index-cell";
+    indexCell.className = "track-table__index";
     indexCell.textContent = displayIndex;
     row.appendChild(indexCell);
 
     //Info cell
     const infoCell = createTrackInfoCell(trackID);
-    infoCell.className = "track-info-cell";
+    infoCell.className = "track-table__info";
     row.appendChild(infoCell);
 
     //Create checkbox cells for each playlist, and append to row.
@@ -341,26 +343,26 @@ function createTrackInfoCell(trackID){
 
     //Track title sits on top in its own div.
     const trackNameDiv = document.createElement("div");
-    trackNameDiv.className = "track-name";
+    trackNameDiv.className = "track__name";
     trackNameDiv.textContent = track ? track.title : trackID;
     cell.appendChild(trackNameDiv);
 
     //Other metadata (artist and album) sits in separate div below, with a separator dot between. FUTURE: think about making these links to spotify IDs or something, opening in window or elsewhere. Since data currently comes through a third party, this would be a roundabout process to acquire for now.
     const trackMetaDiv = document.createElement("div");
-    trackMetaDiv.className = "track-meta";
+    trackMetaDiv.className = "track__meta";
 
     const artistSpan = document.createElement("span");
-    artistSpan.className = "artist";
+    artistSpan.className = "track__artist";
     artistSpan.textContent = track ? track.artist : "Unknown Artist";
     trackMetaDiv.appendChild(artistSpan);
 
     const sepSpan = document.createElement("span");
-    sepSpan.className = "sep";
+    sepSpan.className = "track__sep";
     sepSpan.textContent = " • ";
     trackMetaDiv.appendChild(sepSpan);
 
     const albumSpan = document.createElement("span");
-    albumSpan.className = "album";
+    albumSpan.className = "track__album";
     albumSpan.textContent = track ? track.album : "Unknown Album";
     trackMetaDiv.appendChild(albumSpan);
 
@@ -374,7 +376,7 @@ function createCheckboxCells(trackID){
     
         //Create cell and checkbox. FUTURE: Make checkbox bigger or whole cell clickable for easier toggling.
         const checkCell = document.createElement("td");
-        checkCell.className = "checkbox-cell";
+        checkCell.className = "track-table__checkbox";
         const checkbox = document.createElement("input");
         checkbox.type = "checkbox";
 
@@ -458,7 +460,7 @@ function initSortControl() {
     
     //Wrapper for label and sort dropdown, facilitates dropdown styling
     const wrapper = document.createElement("div");
-    wrapper.className = "sort-button-wrapper";
+    wrapper.className = "control-bar__sort-wrapper";
 
     //Label for sort dropdown
     const label = document.createElement("label");
@@ -520,12 +522,12 @@ function updateFilterCounter(matchCount) {
     // Since renderEmptyTableBody() shows a message for zero matches, no responsibility to indicate this here.
     if (!currentFilter || matchCount === 0) {
         filterCounterElement.textContent = "";
-        filterCounterElement.classList.remove("active");
+        filterCounterElement.classList.remove("filter-counter--active");
         return;
     }
     // Otherwise, show match count with correct pluralization, and add active class for styling
     filterCounterElement.textContent = `${matchCount} match${matchCount !== 1 ? "es" : ""}`;
-    filterCounterElement.classList.add("active");
+    filterCounterElement.classList.add("filter-counter--active");
 }
 
 // Helper method collects and returns an array of all unique track IDs across playlists in first-seen order, used for rendering rows.
@@ -565,8 +567,9 @@ function setupEventListeners() {
 
     //Basic button listeners for save and back.
     document.getElementById("save-btn").addEventListener("click", handleSave);
-    // click event currently handled by link in workspace.html, enabling navigation independent of JS.
-    // document.getElementById("back-btn").addEventListener("click", () => {window.location.href = "..";//Redirect to dashboard/home page});
+    document.getElementById("back-btn").addEventListener("click", () => {
+        window.location.href = "..";//Redirect to dashboard/home page
+    });
 
     // Playlist management buttons
     // FUTURE - Separate section with more controls: reorder, duplicate, create, delete,import/export. Plus shortcut button here for most common, create empty
@@ -588,7 +591,7 @@ function setupEventListeners() {
     //Make all checkbox cells clickable by toggling the checkbox when the cell is clicked, (unless the click is directly on the checkbox)
     //FUTURE consider using custom component or styling to make the entire cell function as a checkbox, rather than this workaround.
     document.getElementById("table-body").addEventListener("click", (e) => {
-        const cell = e.target.closest(".checkbox-cell");
+        const cell = e.target.closest(".track-table__checkbox");
         if (cell && !e.target.matches("input[type='checkbox']")) {
             const checkbox = cell.querySelector("input[type='checkbox']");
             if (checkbox) {
@@ -735,7 +738,7 @@ function buildDropdownPanel(id,mode) {
 
     //Create div element for dropdown panel, which will be positioned and populated with items based on the given playlistID and mode.
     const panel = document.createElement("div");
-    panel.className = "menu-dropdown";
+    panel.className = "dropdown";
 
     //Determine dropdown items based on mode and ID. Rest of the logic should be consistent
     let items = null;
@@ -789,7 +792,7 @@ function buildDropdownPanel(id,mode) {
     for (const item of items) {
         const li = document.createElement("li");
         if (item.divider) {
-            li.className = "dropdown-divider";
+            li.className = "dropdown__divider";
         } else {
             li.textContent = item.label;
             li.addEventListener("click", () => {
@@ -952,7 +955,7 @@ function handleTrackRowClick(trackID, rowEl, index, event) {
         // Plain click: exclusive select — clear all others first
         for (const id of selectedTrackIDs) {
             const row = document.querySelector(`tr[data-track-id="${id}"]`);
-            if (row) row.classList.remove("selected");
+            if (row) row.classList.remove("track-row--selected");
         }
         clearSelection();
         selectTrack(trackID, rowEl);
@@ -1010,7 +1013,7 @@ function wipeCaches() {
 function clearSelection() {
     for (const id of selectedTrackIDs) {
         const row = document.querySelector(`tr[data-track-id="${id}"]`);
-        if (row) row.classList.remove("selected");
+        if (row) row.classList.remove("track-row--selected");
     }
     selectedTrackIDs.clear();
     lastClickedTrackIndex = null;
@@ -1019,13 +1022,13 @@ function clearSelection() {
 // Add a track to the selection and mark its row.
 function selectTrack(trackID, rowEl) {
     selectedTrackIDs.add(trackID);
-    if (rowEl) rowEl.classList.add("selected");
+    if (rowEl) rowEl.classList.add("track-row--selected");
 }
 
 // Remove a track from the selection and unmark its row.
 function deselectTrack(trackID, rowEl) {
     selectedTrackIDs.delete(trackID);
-    if (rowEl) rowEl.classList.remove("selected");
+    if (rowEl) rowEl.classList.remove("track-row--selected");
 }
 
 // Check if a track is currently selected. Returns a boolean.
@@ -1079,7 +1082,7 @@ function handleCmdA() {
     // Add .selected class to all rows in the current filtered set. 
     const tbody = document.getElementById("table-body");
     for (const row of tbody.querySelectorAll("tr[data-track-id]")) {
-        row.classList.add("selected");
+        row.classList.add("track-row--selected");
     }
 }
 
