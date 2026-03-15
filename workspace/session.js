@@ -53,15 +53,16 @@ export class WorkspaceSession {
             console.warn("WorkspaceSession: No playlists were loaded");
         }
 
-        // Fetch all tracks into lookup object.
-        //FUTURE: consider only fetching tracks referenced by loaded playlists in case user library is huge. 
-        //        Fine for current scale and avoids N individual lookups
-        const allTracks = await this.dataManager.getAllRecords("tracks");
+        // Collect trackIDs referenced by loaded playlists, then fetch only those tracks.
+        const neededTrackIDs = new Set(rawPlaylists.flatMap(pl => pl.trackIDs || []));
+        const trackResults = await Promise.all(
+            [...neededTrackIDs].map(tid => this.dataManager.getRecord("tracks", tid))
+        );
         this.tracks = {};
-        for (const track of allTracks) {
-            this.tracks[track.trackID] = track;
+        for (const track of trackResults) {
+            if (track) this.tracks[track.trackID] = track;
         }
-        console.log(`WorkspaceSession: ${allTracks.length} tracks loaded into lookup objct`);
+        console.log(`WorkspaceSession: ${Object.keys(this.tracks).length} tracks loaded into lookup object (${neededTrackIDs.size} referenced)`);
 
         // Augment playlist objects with session-layer fields (via shared helper)
         this.playlists = rawPlaylists.map(pl => this.augmentPlaylist(pl));
@@ -100,6 +101,19 @@ export class WorkspaceSession {
         }
         const augmented = this.augmentPlaylist(raw);
         this.playlists.push(augmented);
+
+        // Fetch tracks introduced by this playlist that aren't already in the session.
+        const novelTrackIDs = (raw.trackIDs || []).filter(tid => !this.tracks[tid]);
+        if (novelTrackIDs.length > 0) {
+            const novelTracks = await Promise.all(
+                novelTrackIDs.map(tid => this.dataManager.getRecord("tracks", tid))
+            );
+            for (const track of novelTracks) {
+                if (track) this.tracks[track.trackID] = track;
+            }
+            console.log(`addPlaylist: appended ${novelTracks.filter(Boolean).length} novel tracks from '${raw.name}'`);
+        }
+
         return augmented;
     }
 
