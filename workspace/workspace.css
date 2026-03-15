@@ -16,26 +16,6 @@ body {
     color: var(--color-text);
 }
 
-button {
-    background-color: var(--color-green);
-    color: var(--color-button-text);
-    cursor: pointer;
-    transition: background-color var(--transition-fast), font-weight var(--transition-fast);
-    height: 32px;
-    vertical-align: middle;
-    font-size: var(--font-size-button);
-}
-button:disabled {
-    background-color: var(--color-disabled);
-    cursor: default;
-}
-button:hover:not(:disabled) {
-    background-color: var(--color-green-hover);
-    text-decoration: underline;
-    font-weight: 500;
-}
-
-
 /* ========== PAGE STRUCTURE ========== */
 
 /* Page Header */
@@ -206,6 +186,16 @@ button:hover:not(:disabled) {
     align-items: center;
 }
 #filter-counter.filter-counter--active {
+    display: flex;
+}
+#selection-counter {
+    font-size: var(--font-size-controls);
+    color: var(--color-text-muted);
+    white-space: nowrap;
+    display: none;
+    align-items: center;
+}
+#selection-counter.selection-counter--active {
     display: flex;
 }
 

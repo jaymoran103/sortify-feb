@@ -23,13 +23,11 @@ class ModalController {
         this._footerEl   = document.createElement("div");
         this._footerEl.className = "modal__footer";
 
-        // TODO: Create dynamically based on modal type. Fine till option modals are implemented.
-        // Buttons wired dynamically via open() config, but create elements here to avoid re-creating on each open.
+        // Persistent buttons for standard confirm/cancel path. Actions path builds buttons dynamically per open().
         this._cancelBtn  = document.createElement("button");
+        this._cancelBtn.className  = "modal__btn modal__btn--cancel";
         this._confirmBtn = document.createElement("button");
-
-        this._footerEl.appendChild(this._cancelBtn);
-        this._footerEl.appendChild(this._confirmBtn);
+        this._confirmBtn.className = "modal__btn modal__btn--confirm";
 
         modal.appendChild(this._titleEl);
         modal.appendChild(this._bodyEl);
@@ -52,13 +50,37 @@ class ModalController {
     }
 
     // Open the modal with the given config. Returns a Promise that resolves with the result or null.
-    // Args: { title, body, confirmLabel, cancelLabel, showCancel, onConfirm }
-    open({ title, body, confirmLabel = "OK", cancelLabel = "Cancel", showCancel = true, onConfirm }) {
-        // Set title and button labels
-        this._titleEl.textContent    = title;
-        this._confirmBtn.textContent = confirmLabel;
-        this._cancelBtn.textContent  = cancelLabel;
-        this._cancelBtn.hidden       = !showCancel;
+    // Args: { title, body, confirmLabel, cancelLabel, showCancel, onConfirm, actions }
+    // When "actions" is provided, footer builds one button per action instead of persistent cancel/confirm.
+    // Each action: { label, value, className? } — modal closes with that action's value when clicked.
+    open({ title, body, confirmLabel = "OK", cancelLabel = "Cancel", showCancel = true, onConfirm, actions }) {
+        // Reset modifier classes from previous open
+        this._overlay.firstElementChild.className = "modal";
+
+        this._titleEl.textContent = title;
+
+        // Footer: dynamic action buttons, or restore persistent cancel/confirm
+        this._footerEl.innerHTML = "";
+        if (actions) {
+            // Build one button per action; close with that action's value on click
+            for (const action of actions) {
+                const btn = document.createElement("button");
+                btn.textContent = action.label;
+                btn.className   = action.className ? `modal__btn ${action.className}` : "modal__btn";
+                btn.addEventListener("click", () => this.close(action.value ?? null));
+                this._footerEl.appendChild(btn);
+            }
+        } else {
+            // Standard confirm/cancel path
+            this._confirmBtn.disabled    = false;
+            this._confirmBtn.textContent = confirmLabel;
+            this._confirmBtn.onclick     = onConfirm ?? (() => this.close(true));
+            this._cancelBtn.textContent  = cancelLabel;
+            this._cancelBtn.hidden       = !showCancel;
+            this._cancelBtn.onclick      = () => this.close(null);
+            this._footerEl.appendChild(this._cancelBtn);
+            this._footerEl.appendChild(this._confirmBtn);
+        }
 
         // Clear body and populate via callback
         this._bodyEl.innerHTML = "";
@@ -67,18 +89,15 @@ class ModalController {
         // Show
         this._overlay.classList.add("modal-overlay--visible");
 
-        // Focus: first input if present, otherwise confirm button
+        // Add focus to the first input if present, otherwise the last action button, which should always be the least problematic/risky option.
         const firstInput = this._bodyEl.querySelector("input");
-        if (firstInput) { firstInput.focus(); firstInput.select(); }
-        else            { this._confirmBtn.focus(); }
+        if (firstInput)   { firstInput.focus(); firstInput.select(); }
+        else if (actions) { this._footerEl.lastElementChild?.focus(); }
+        else              { this._confirmBtn.focus(); }
 
         // Escape equates to cancel, closes modal
         this._keyHandler = (e) => { if (e.key === "Escape") this.close(null); };
         document.addEventListener("keydown", this._keyHandler);
-
-        // Wire buttons
-        this._confirmBtn.onclick = onConfirm ?? (() => this.close(true));
-        this._cancelBtn.onclick  = () => this.close(null);
 
         return new Promise(resolve => { this._resolve = resolve; });
     }
@@ -178,6 +197,143 @@ export function notifyModal({ title, message, confirmLabel = "OK" } = {}) {
             p.className   = "modal__message";
             p.textContent = message;
             container.appendChild(p);
+        }
+    });
+}
+
+
+// Open a warning modal with a custom set of action buttons.
+// actions: array of { label, value, className? } rendered as buttons in order, least destructive last (ensuring focus on safest option).
+// Returns the value of the clicked action, or null if dismissed via ESC/backdrop.
+// Caller matches on the returned value to decide what to do.
+// TODO add custom styling to convey stakes of warning modals
+export function warningModal({ title, message, actions = [] } = {}) {
+    return _modal.open({
+        title,
+        actions,
+        body(container) {
+            const p       = document.createElement("p");
+            p.className   = "modal__message";
+            p.textContent = message;
+            container.appendChild(p);
+        }
+    });
+}
+
+
+// open a playlist selector modal: scrollable list of playlists with checkboxes and search.
+// playlists: array of { id, name, trackIDs } — pre-filtered by caller (e.g. excluding already-loaded ones).//TODO Make this clear to the user somewhere? Or just dont filter, really depends on use case/library size. Readding could prompt a modal offering to duplicate that one. KIS: keep as is.
+// Returns an array of selected IDB ids, or null if cancelled/dismissed.
+// FUTURE: Reuse for dashboard workspace launcher and any export playlist picker.
+export function playlistSelectModal({ title = "Select Playlists", confirmLabel = "Add", cancelLabel = "Cancel", playlists = [] } = {}) {
+    let selectedIds = new Set();
+    let noteEl;
+
+    //Helper method triggered when playlist checkbox toggled: updates selectedIds set, row highlight, and toggles confirm button state depending on input validity.
+    //FUTURE: Extract state update/validation to base modal for a more responsive "OK/Continue" button? Dont wanna invalidate existing validation methods for now, theyre more than fine
+    function updateState() {
+        const count = selectedIds.size;
+        noteEl.textContent          = count > 0 ? `${count} selected` : "";
+        _modal._confirmBtn.disabled = count === 0;
+    }
+
+    // Helper method a single playlist row with checkbox, name, and track count
+    //NOTE: Leaving here for now for simplicity, want to extract as non-anonymous function later. 
+    //FUTURE: Extract as non-modal specific element for components like dashboard library widget?
+    function buildPlaylistRow(pl, list) {
+        const label       = document.createElement("label");
+        label.className   = "modal__list-row";
+
+        const checkbox    = document.createElement("input");
+        checkbox.type     = "checkbox";
+
+        // Wire checkbox change to update selectedIds set and row highlight, then update confirm button state.
+        checkbox.addEventListener("change", () => {
+            if (checkbox.checked) {
+                selectedIds.add(pl.id);
+                label.classList.add("modal__list-row--checked");
+            } else {
+                selectedIds.delete(pl.id);
+                label.classList.remove("modal__list-row--checked");
+            }
+            updateState();
+        });
+
+        const nameSpan        = document.createElement("span");
+        nameSpan.className    = "modal__list-row-name";
+        nameSpan.textContent  = pl.name;
+
+        const countSpan       = document.createElement("span");
+        countSpan.className   = "modal__list-row-count";
+        const trackCount      = pl.trackIDs?.length ?? 0;
+        countSpan.textContent = `${trackCount} track${trackCount !== 1 ? "s" : ""}`;
+
+        label.appendChild(checkbox);
+        label.appendChild(nameSpan);
+        label.appendChild(countSpan);
+        list.appendChild(label);
+
+        return { label, name: pl.name.toLowerCase() };
+    }
+
+    // Open modal with body callback that builds search input, playlist rows, and search filter logic.
+    return _modal.open({
+        title,
+        confirmLabel,
+        cancelLabel,
+        showCancel: true,
+        body(container) {
+            // Add list modifier class to the modal element
+            _modal._overlay.firstElementChild.classList.add("modal--list");
+
+            // Search input
+            const searchInput         = document.createElement("input");
+            searchInput.type          = "text";
+            searchInput.className     = "modal__search-input";
+            searchInput.placeholder   = "Search playlists\u2026";
+
+            // Scrollable list
+            const list      = document.createElement("div");
+            list.className  = "modal__list";
+
+            const emptyMsg        = document.createElement("p");
+            emptyMsg.className    = "modal__list-empty";
+            emptyMsg.textContent  = "No playlists match your search.";
+            emptyMsg.hidden       = true;
+
+            // One row per playlist
+            const rows = playlists.map(pl => buildPlaylistRow(pl, list));
+
+            list.appendChild(emptyMsg);
+
+            // Filter rows on search input
+            searchInput.addEventListener("input", () => {
+                const query = searchInput.value.trim().toLowerCase();
+                let visibleCount = 0;
+                for (const { label, name } of rows) {
+                    const match = !query || name.includes(query);
+                    label.hidden = !match;
+                    if (match) visibleCount++;
+                }
+                emptyMsg.hidden = visibleCount > 0;
+            });
+
+            container.appendChild(searchInput);
+            container.appendChild(list);
+
+            // Inject "N selected" counter into footer, left of buttons
+            const old = _modal._footerEl.querySelector(".modal__footer-note");
+            if (old) old.remove();
+            noteEl           = document.createElement("span");
+            noteEl.className = "modal__footer-note";
+            _modal._footerEl.prepend(noteEl);
+
+            // Start with confirm disabled (nothing selected yet)
+            _modal._confirmBtn.disabled = true;
+        },
+        onConfirm() {
+            if (selectedIds.size === 0) return;
+            _modal.close([...selectedIds]);
         }
     });
 }

@@ -1,5 +1,8 @@
 import WorkspaceSession from "./session.js";
-import { promptModal, notifyModal } from "../shared/modal.js";
+import { promptModal, notifyModal, playlistSelectModal, warningModal } from "../shared/modal.js";
+
+
+//TODO Fix ugly spacing/formatting for modal argument construction
 
 const session = new WorkspaceSession();
 // Session state: primarily managed by WorkspaceSession. module-level vars set to live references inside session after load().
@@ -568,9 +571,9 @@ function setupEventListeners() {
 
     //Basic button listeners for save and back.
     document.getElementById("save-btn").addEventListener("click", handleSave);
-    document.getElementById("back-btn").addEventListener("click", () => {
-        window.location.href = "..";//Redirect to dashboard/home page
-    });
+    const backBtn = document.getElementById("back-btn");
+    backBtn.onclick = null; // clear the existing onclick listener, ensuring use of this button after the page renders will use the proper handleBackButton() method, subject to checks and save warnings before returning to the dashboard.
+    backBtn.addEventListener("click", handleBackButton);
 
     // Playlist management buttons
     // FUTURE - Separate section with more controls: reorder, duplicate, create, delete,import/export. Plus shortcut button here for most common, create empty
@@ -641,6 +644,48 @@ function updateSaveStatus() {
         saveStatus.textContent = "";
     }
 }
+
+// Handler for back button: warns about empty playlists, then about unsaved changes before navigating away.
+// NOTE: Replaces behavior determined in original onclick, ensuring "Back to workspace" action is subject to save checks, only exiting immediately if a session error occurs before init is able to set up proper handlers. FUTURE: Verify nothing can go wrong while table is actually rendering, giving us a state with buttons set up but a data/table issue.
+async function handleBackButton() {
+
+    // Warn if any playlist has no tracks
+    const emptyPlaylists = playlists.filter(p => p.trackIDSet.size === 0);
+    if (emptyPlaylists.length > 0) {
+        const names = emptyPlaylists.map(p => `"${p.name}"`).join(", ");//FUTURE: More elegant approach in case of long playlist set?
+        const label = emptyPlaylists.length === 1 ? `${names} has no tracks.` : `${emptyPlaylists.length} playlists have no tracks: ${names}.`;
+        const result = await warningModal({
+            title: "Empty Playlist",
+            message: `${label} Leave anyway?`,
+            actions: [
+                { label: "Cancel", value: null },
+                { label: "Exit Without Saving", value: "discard-exit", className: "modal__btn--danger"},
+                { label: "Save and Exit", value: "save-exit", className: "modal__btn--primary"},
+            ]
+        });
+        if (result === "save-exit") { await handleSave(); }
+        else if (result !== "discard-exit") { return; } // null = cancelled
+    }
+
+    // Warn if unsaved changes exist (modified or pending-save playlists)
+    const hasUnsaved = modifiedPlaylists.size > 0 || session.pendingPlaylists.length > 0;
+    if (hasUnsaved) {
+        const result = await warningModal({
+            title: "Unsaved Changes",
+            message: "You have unsaved changes, are you sure you want to exit?",
+            actions: [
+                { label: "Cancel", value: null },
+                { label: "Exit Without Saving", value: "discard-exit", className: "modal__btn--danger"},
+                { label: "Save and Exit", value: "save-exit", className: "modal__btn--primary"},
+            ]
+        });
+        if (result === "save-exit") { await handleSave(); }
+        else if (result !== "discard-exit") { return; } // null = cancelled
+    }
+
+    window.location.href = ".."; // Redirect to dashboard
+}
+
 //Handler for save button: persists modified playlists to IndexedDB via session.save(), adds timestamp for confirmation
 async function handleSave() {
     const saveBtn = document.getElementById("save-btn");
@@ -747,36 +792,36 @@ function buildDropdownPanel(id,mode) {
         case "playlist":
             const playlistID = id;
             items = [
-                { label: "Select all Tracks",            action: () => handleBulkMembershipUpdate(playlistID, true) },
-                { label: "Deselect all Tracks",          action: () => handleBulkMembershipUpdate(playlistID, false) },
+                { label: "Select all Tracks",           action: () => handleBulkMembershipUpdate(playlistID, true) },
+                { label: "Deselect all Tracks",         action: () => handleBulkMembershipUpdate(playlistID, false) },
                 { divider: true },
-                { label: "Rename Playlist",                action: () => handleRenamePlaylist(playlistID) },
-                { label: "Duplicate Playlist",             action: () => handleDuplicatePlaylist(playlistID) },
+                { label: "Rename Playlist",             action: () => handleRenamePlaylist(playlistID) },
+                { label: "Duplicate Playlist",          action: () => handleDuplicatePlaylist(playlistID) },
                 { divider: true },
-                { label: "Remove from workspace", action: () => handleRemovePlaylist(playlistID) },//Use same wording as 
+                { label: "Remove from workspace",       action: () => handleRemovePlaylist(playlistID) },//Use same wording as 
             ];
             break;
         case "track":
             //NOTE: most track actions currently don't expect an id, since handlers reference selectedTrackIDs directly. 
             items = [
-                { label: "Add to all Playlists",            action: () => handleAddTrackToAll()}, 
-                { label: "Remove from all Playlists",       action: () => handleRemoveTrackFromAll()}, 
+                { label: "Add to all Playlists",        action: () => handleAddTrackToAll()}, 
+                { label: "Remove from all Playlists",   action: () => handleRemoveTrackFromAll()}, 
                 { divider: true },
                 { label: "Delete Track from workspace", action: () => handleDeleteTrack()}, 
                 { divider: true },
                 //These two rely on "track" mode only opening when one track is selected (Caller openDropdown updates it to track-multi if multiple tracks are selected)
                 //Fine as long as all tracks are from the same source, not especially important or useful going forward
-                { label: "Open in Spotify",       action: () => handleOpenInSpotify([...selectedTrackIDs][0])}, 
-                { label: "Copy Track ID",         action: () => handleCopyTrackID([...selectedTrackIDs][0])},
+                { label: "Open in Spotify",             action: () => handleOpenInSpotify([...selectedTrackIDs][0])}, 
+                { label: "Copy Track ID",               action: () => handleCopyTrackID([...selectedTrackIDs][0])},
             ];
             break;
         case "track-multi":
             //NOTE: most track actions currently don't expect an id, since handlers reference selectedTrackIDs directly. 
             items = [
-                { label: `Add ${selectedTrackIDs.size} tracks to all Playlists`,            action: () => handleAddTrackToAll()}, 
-                { label: `Remove ${selectedTrackIDs.size} tracks from all Playlists`,       action: () =>  handleRemoveTrackFromAll()}, 
+                { label: `Add ${selectedTrackIDs.size} tracks to all Playlists`,      action: () => handleAddTrackToAll()}, 
+                { label: `Remove ${selectedTrackIDs.size} tracks from all Playlists`, action: () =>  handleRemoveTrackFromAll()}, 
                 { divider: true },
-                { label: `Delete ${selectedTrackIDs.size} tracks from workspace`, action: () => handleDeleteTrack()},
+                { label: `Delete ${selectedTrackIDs.size} tracks from workspace`,     action: () => handleDeleteTrack()},
             ];
             break;
         default:
@@ -862,8 +907,23 @@ async function handleRenamePlaylist(playlistID) {
     updateSaveStatus();
 }
 
-// Handler for removing a playlist from the workspace.
-function handleRemovePlaylist(playlistID) {
+// Handler for removing a playlist from the workspace. Warns if the playlist has unsaved changes.
+async function handleRemovePlaylist(playlistID) {
+    const playlist = playlists.find(p => p.playlistID === playlistID);
+    const hasUnsaved = playlist && (modifiedPlaylists.has(playlistID) || session.pendingPlaylists.includes(playlist));
+    if (hasUnsaved) {
+        const proceed = await warningModal({
+            title:   "Unsaved Changes",
+            message: `"${playlist.name}" has unsaved changes. Remove it from the workspace without saving?`,
+            actions: [
+                { label: "Cancel",                value: null,                                           },
+                { label: "Remove Without Saving", value: "discard-exit", className: "modal__btn--danger" },
+                { label: "Save First",            value: "save-exit",   className: "modal__btn--primary" },
+            ]
+        });
+        if (!proceed) return;
+        if (proceed === "save-exit") await handleSave();
+    }
     session.removePlaylist(playlistID);
     resetLoadedRows();
     renderWorkspaceTable();
@@ -889,32 +949,52 @@ function handleAddTrackToAll() {
         }
     }
     
-    wipeCaches();//TODO need this here?
     resetLoadedRows();
-    renderTableBody();
-    updateSaveStatus();
-}
+    renderWorkspaceTable();
+    updateSaveStatus();}
 
 
 
-// Remove all selected tracks from every playlist that contains them.
-function handleRemoveTrackFromAll() {
+// Remove all selected tracks from every playlist that contains them. Warns when multiple tracks are selected.
+async function handleRemoveTrackFromAll() {
+    if (playlists.size>1 && selectedTrackIDs.size > 1) {
+        const proceed = await warningModal({
+            title:   "Remove from All Playlists",
+            message: `Remove ${selectedTrackIDs.size} tracks from each playlist in the workspace?`,
+            actions: [
+                { label: `Remove ${selectedTrackIDs.size} Tracks`, value: "continue", className: "modal__btn--danger" },
+                { label: "Cancel",                                 value: null                                        }
+            ]
+        });
+        if (!proceed) return;///FUTURE add toasts to confirm action?
+    }
     for (const trackID of selectedTrackIDs) {
         for (const playlist of playlists) {
             if (playlist.trackIDSet.has(trackID)) {
                 session.toggleTrack(playlist.playlistID, trackID);
             }
         }
-    }
-    wipeCaches();
-    resetLoadedRows();
-    renderTableBody();
+    }    resetLoadedRows();
+    renderWorkspaceTable();
     updateSaveStatus();
+
 }
 
 
-// Remove all selected tracks from all playlists and their rows from the table.
-function handleDeleteTrack() {
+// Remove all selected tracks from all playlists and their rows from the table. Warns when multiple tracks are selected.
+async function handleDeleteTrack() {
+    if (selectedTrackIDs.size > 1) {
+        const proceed = await warningModal({
+            title:   "Delete Tracks",
+            // message: `Remove ${selectedTrackIDs.size} tracks from the workspace? To add it again, you'd need to add another playlist that contains the track.`,
+            message: `Remove ${selectedTrackIDs.size} tracks from the workspace? You'll need to add them via another playlist to see them again.`,
+            actions: [
+                { label: `Remove ${selectedTrackIDs.size} Tracks`, value: "continue", className: "modal__btn--danger" },
+                { label: "Cancel",                                 value: null                                        }
+            ]
+        });
+        if (!proceed) return;
+    }
     for (const trackID of selectedTrackIDs) {
         session.removeTrackFromWorkspace(trackID);
     }
@@ -975,28 +1055,35 @@ function handleTrackRowClick(trackID, rowEl, index, event) {
     }
 }
 
-// Handler for adding an existing playlist to the workspace by ID. Opens a modal for input with inline validation, then loads and re-renders.
-// FUTURE: Replace with a playlist selector modal showing a scrollable list of available playlists with checkboxes. Use same logic as dashboard playlist selector. Validate by comparing to existing playlists in workspace?
+// Handler for adding existing playlists to the workspace. Fetches full library from IDB, excludes already-loaded playlists, then shows a selector modal.
 async function handleAddPlaylist() {
-    const input = await promptModal({
-        title: "Add Playlist",
-        confirmLabel: "Add",
-        placeholder: "Playlist ID (number)",
-        validate: (value) => {
-            const id = Number(value);
-            return (Number.isInteger(id) && id > 0) ? null : "Enter a valid numeric playlist ID.";
-        }
-    });
-    if (!input) return;
+    // Fetch all IDB playlists and exclude ones already in the workspace
+    const allPlaylists = await session.dataManager.getAllRecords("playlists");
+    const loadedIds    = new Set(playlists.map(p => p.id));
+    const available    = allPlaylists.filter(p => !loadedIds.has(p.id));
 
-    const selectedPlaylist = await session.addPlaylist(Number(input));//Enforce numeric type here. Non permanent approach
-    if (!selectedPlaylist) {
+    if (available.length === 0) {
         await notifyModal({
-            title: "Not Found",
-            message: "Playlist not found or already in workspace.",
+            title: "No Playlists Available",
+            message: "All playlists in your library are already in the workspace.",
             confirmLabel: "OK"
         });
         return;
+    }
+
+    //Use playlistSelectModal get a set of selected IDs.
+    const selectedIds = await playlistSelectModal({
+        title: "Add Playlist",
+        confirmLabel: "Add",
+        playlists: available
+    });
+
+    //If user cancelled or made no selection, exit. 
+    if (!selectedIds) return;
+
+    //Add each selected playlist to the session sequentially, which updates the workspace state and triggers a re-render. 
+    for (const id of selectedIds) {
+        await session.addPlaylist(id);
     }
 
     resetLoadedRows();
