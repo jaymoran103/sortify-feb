@@ -288,8 +288,6 @@ function renderNextBatch() {
 }
 
 // Helper method creates a display row for a given trackID.
-
-
 function createTrackRow(trackID, displayIndex){
     const row = document.createElement("tr");
 
@@ -399,14 +397,49 @@ function createCheckboxCells(trackID){
 
 // Main Sort Method: returns sorted array of trackIDs based on given criteria. 
 // Approaches include deferring to stableOrder (order-added), checking for presence in a given playlist, or original field-based sort as default strategy
-// FUTURE: Missing fields currently sort to top, consider putting them at bottom for inessential metadata like BPM or genre info
+// NOTE: Missing fields currently sort to top, consider putting them at bottom for inessential metadata like BPM or genre info
 // FUTURE: Make sort output more intuitive by stripping non A-Z characters and ignoring case. Similarly strip " the" from names?
 function sortTrackIDs(trackIDs, criteria) {
 
-    // "order-added": return as-is fo default, preserving stableOrder sequence. // Could return stableOrder directly or filtered, trackIDs keeps this a more pure function.
+    // "order-added": return as-is fo default, preserving stableOrder sequence. 
     if (criteria === "order-added") {
         return trackIDs;
-    } //else if (criteria.
+    }
+
+    // "most-playlists": sort by how many loaded playlists contain each track, descending. Tiebreak by stableOrder position.
+    if (criteria === "most-playlists") {
+
+        // Count numbe of playlists containing each trackID.
+        const countMap = new Map();
+        for (const playlist of playlists) {
+            for (const tid of playlist.trackIDs) {
+                countMap.set(tid, (countMap.get(tid) || 0) + 1);
+            }
+        }
+
+        // Build a map of trackID to original position in stableOrder for tiebreaking.
+        const originalPosition = new Map();
+        stableOrder.forEach((trackID, index) => {
+            originalPosition.set(trackID, index);
+        });
+
+        // Sort: most playlists first, then by original position as tiebreaker to ensure stable order among tracks with the same count. T
+        const sortedTracks = [...trackIDs].sort((a, b) => {
+            const countA = countMap.get(a) || 0;
+            const countB = countMap.get(b) || 0;
+
+            // Sort by count descending
+            if (countA !== countB) {
+                return countB - countA; 
+            } 
+            // Tiebreak by original position in stableOrder, ensuring a deterministic result that aligns with default display behavior
+            else {
+                const posA = originalPosition.get(a);// FUTURE: add a defensive high index in case a track isn't found in stable order? Shouldnt be possible
+                const posB = originalPosition.get(b);
+                return posA - posB; // Tiebreak by original position
+            }
+        });
+    } 
 
     // "playlist:PlaylistID": tracks in the named playlist appear first in playlist order;
     // remaining workspace tracks follow in their current filtered order.
@@ -427,7 +460,7 @@ function sortTrackIDs(trackIDs, criteria) {
         const playlistFirst = playlist.trackIDs.filter(id => trackIDsSet.has(id)); // playlist order, scoped to visible tracks
         const rest = trackIDs.filter(id => !inPlaylist.has(id));
         return [...playlistFirst, ...rest];
-    } //else if
+    } //else {
 
     // Compare given criteria to the given field's value for each track (title, artist, album), should extend fine to new fields down the road.
     return [...trackIDs].sort((a, b) => {
@@ -503,10 +536,11 @@ function initSortControl() {
 
     // Define options for sorting, then create and append option elements to the select.
     const options = [
-        { value: "order-added",    label: "order added" },//or added order? counterpart is recently added? but its less of an ongoing thing in this context.
+        { value: "order-added",    label: "Order Added" },//FUTURE decide on best display name: "Recently Added", "Default", "Order Added (Default)", "Added Order".
         { value: "title",          label: "Title" },
         { value: "artist",         label: "Artist" },
         { value: "album",          label: "Album" },
+        { value: "most-playlists", label: "Most Playlists" }, //FUTURE - decide on best display name: "Most Playlists", "Playlist Count", "Most Represented"
     ];
     for (const opt of options) {
         const optionElement = document.createElement("option");
@@ -936,7 +970,7 @@ function buildDropdownPanel(id,mode) {
 // FUTURE: consider additional option to select all, filtered or not
 function handleBulkMembershipUpdate(playlistID, desiredState) {
 
-    // Access or recopute cachedFilteredID, using stableOrder as a base to be filtered from (implictly sorted by order added))
+    // Access or recopute cachedFilteredID, using stableOrder as a base to be filtered from (implictly sorted by added order))
     cachedFilteredIDs ??= filterTrackIDs(stableOrder, currentFilter);
 
     const playlist = playlists.find(p => p.playlistID === playlistID);
@@ -1184,10 +1218,7 @@ async function handleCreateEmptyPlaylist() {
 
     session.createEmptyPlaylist(name);
 
-    // refreshWorkspace();
-    resetLoadedRows();
-    renderWorkspaceTable();
-    updateSaveStatus();
+    refreshWorkspace();
 }
 
 
