@@ -1,41 +1,53 @@
 import WorkspaceSession from "./session.js";
 import { promptModal, notifyModal, playlistSelectModal, warningModal } from "../shared/modal.js";
 
-
-//TODO Fix ugly spacing/formatting for modal argument construction
+// MODULE OVERVIEW
+// workspace.js  — View layer. Renders the track table, handles user input, coordinates display state.
+// session.js — Data layer. Owns playlist/track data, load/save from IndexedDB, and all in-memory mutations.
+//
+// Relationship:
+//   - workspace.js creates a single WorkspaceSession instance and calls session.load() during init().
+//   - After loading, workspace.js holds live references to session data, available for rendering without needing to sync or copy.
+//   - workspace.js never mutates session data directly, all data mutations go through session methods.
+//   - workspace.js calls refreshWorkspace() or narrower render helpers after session mutations to reflect changes in the DOM.
 
 const session = new WorkspaceSession();
-// Session state: primarily managed by WorkspaceSession. module-level vars set to live references inside session after load().
-// Render functions read these directly, so pointing them at session's arrays keeps everything in sync without a second copy of the data.
 
-// Main data structures for workspace. Set to reference session's live data after loading
+// Session Data: Live references to data structures owned and manipulated by session.js. Only updated via session methods, should always reflect the current state of the session.
 let playlists = [];                // Sequential array of playlist objects, augmented with session-layer fields after loading.
 let tracks = {};                   // Lookup object mapping trackID to track data.
 let modifiedPlaylists = new Set(); // Set of 'dirty' playlist IDs to save.
 
-// Display Variables: Filter + Sort
+// Display tate fields: Represent the current UI state for sorting and filtering.
 let currentFilter = "";         // lowercased search query, modified by search input event listener. Empty string means no filter
 let currentSort = "order-added"; // Sort state for table rendering. "order-added" uses stableOrder directly; other values compute a sort.
-let stableOrder = [];           // Array of all trackIDs in first-seen order, used as the unchanging base for all display ordering. Set once at load, updated only when tracks are added/removed from the workspace. //FUTURE: Does this belong in session instead since its such a fundamental property?
+let stableOrder = [];           // Array of all trackIDs in first-seen order, used as the unchanging base for all display ordering. Set once at load, updated only when tracks are added/removed from the workspace.
 let cachedFilteredIDs = null;   // Array representing a filtered subset of stableOrder for the current filter. Reset when filter changes or track set changes.
 
-// Lazy load state.
+// Dropdown state: singleton pattern ensures just one dropdown can open.
+let activeDropdown = null; // currently open dropdown panel, or null if none open.
+
+// Selection state: stored trackID(s) of currently selected row(s), and index of last clicked row for shift-click range selection.
+let selectedTrackIDs = new Set();
+let lastClickedTrackIndex = null;
+
+// DOM refs set once during init, used across render calls
+let filterCounterElement; // set by initControlCounters(), 
+let selectionCounterElement; // set by initControlCounters()
+let scrollObserver;  // set by initScrollObserver()
+
+// Lazy load state
 const BATCH_SIZE = 100;  // Rows appended per scroll-triggered batch.
 let loadedCount  = 0;    // Tracks number of rows currently in the DOM for the active displayList.
 let displayList  = [];   // Full filtered+sorted ID list for current display state. Sliced by renderNextBatch().
 
-// Dropdown state
-let activeDropdown = null; // currently open dropdown panel, or null if none open.
 
-// DOM refs set once during init, used across render calls
-let filterCounterElement; // set by initFilterCounter(), 
-let selectionCounterElement; // set by initFilterCounter()
-let scrollObserver;  // set by initScrollObserver()
+/** ==================
+ *  INITIALIZATION
+ *  ==================
+ */
 
-//Selection state: stored trackID(s) of currently selected row(s), and index of last clicked row for shift-click range selection.
-let selectedTrackIDs = new Set();
-let lastClickedTrackIndex = null;
-
+// Main initialization method: loads session data, sets up workspace state, and renders the table. Called once on page load.
 async function init() {
 
     // Read session created by the dashboard before navigating here
@@ -46,6 +58,7 @@ async function init() {
         console.error("Failed to parse workspaceSession from sessionStorage:", e);
     }
 
+    // If no session found, or session doesn't contain playlist IDs, show error message and return early to avoid trying to load an invalid session.
     if (!savedSession || !savedSession.playlistIds) {
         let message = "No workspace session found. Please select playlists from the dashboard.";
         console.warn(message);
@@ -53,11 +66,11 @@ async function init() {
         return;
     }
 
-    console.log(`Restoring session (created ${savedSession.timestamp}).`,
-        "Playlist IDs:", savedSession.playlistIds);
+    console.log(`Restoring session (created ${savedSession.timestamp}).`,"Playlist IDs:", savedSession.playlistIds);
 
     await showProgressBar(); //Show load bar. (hidden in catch, empty playlists case, and method end).
 
+    // Try to load session data from IndexedDB using the playlist IDs from sessionStorage.
     try {
         await session.load(savedSession.playlistIds);
     } catch (err) {
@@ -68,6 +81,7 @@ async function init() {
         return;
     }
 
+    // If no playlists were loaded, show error page rather than rendering an empty workspace.
     if (session.playlists.length === 0) {
         hideProgressBar();
         showSessionError("No playlists were found for the selected IDs.");
@@ -85,38 +99,39 @@ async function init() {
     // Instantiate workspace controls
     console.log("Setting up workspace for playlists:", playlists.map(p => p.name));
     initScrollObserver(); // must be before first render so observer exists when sentinel enters view
-    initSortControl();
-    initSearchControl(); //FUTURE: Standardize these two names? I see search as the user control, filter as the operation.
-    initFilterCounter();
+    initSortControl(); 
+    initSearchControl();
+    initControlCounters();
 
     // Once display is mostly loaded, ensure controls paint before continuing.
-    await yieldForPaint();//FUTURE: Consider showing some empty table element for visual consistency, populating once data is ready.
+    await yieldForPaint();
 
     //Continue workspace setup: event listeners, render workspace, and  hide progress bar.
     setupEventListeners();
-    renderWorkspaceTable();
+
+    // refreshWorkspace(); // Could call instead of both render methods, but don't need the full refresh here.
+    renderTableHeader();
+    renderTableBody();
+
     hideProgressBar();
 }
 
 // On session error, display the session-error section with a given message, and hide other workspace elements.
+// Navigation links to dashboard are set in workspace.html, so user can backtrack without relying on javascript or anything here.
 function showSessionError(message) {
 
     //If no error message provided, warn in console.
     if (!message){
         console.error("showSessionError called without message.");
         message = "An unexpected error occurred.";
-        alert("An unexpected error occurred, make sure error state comes with a message");//FUTURE: Just for development, dont want these to go unseen. //NOTE: Dont replace with modal, can't rely on any JS.
     }
 
     // Set error message and show session-error section.
     document.getElementById("session-error-message").textContent = message ;
     document.getElementById("session-error").hidden = false;
     document.getElementById("workspace-container").hidden = true;
-
-    //Hide controls since they won't function without a valid session, and to avoid confusion in the error state. FUTURE: Consider hiding individual controls instead of the whole bar, or showing a different set of controls relevant to the error state (e.g. retry button if load failed).
     document.getElementById("save-controls").hidden = true;
     document.getElementById("control-bar").hidden = true;
-    //FUTURE: Review final page layout, ensuring nothing dependent on valid session/data remains.
 }
 
 // Show and hide the progress bar during async loading operations.
@@ -124,7 +139,6 @@ async function showProgressBar() {
     document.getElementById("progress-bar").classList.add("progress-bar--loading");
     await yieldForPaint(); // Ensure the progress bar is visible before continuing with loading.
 }
-
 function hideProgressBar() {
     document.getElementById("progress-bar").classList.remove("progress-bar--loading");
 }
@@ -134,9 +148,71 @@ async function yieldForPaint(){
     await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
 }
 
-function renderWorkspaceTable() {
+// Set up event listeners for checkboxes and buttons. Called once in init()
+function setupEventListeners() {
+
+    //Basic button listeners for save and back.
+    document.getElementById("save-btn").addEventListener("click", handleSave);
+    const backBtn = document.getElementById("back-btn");
+    backBtn.onclick = null; // clear the existing onclick listener, ensuring use of this button after the page renders will use the proper handleBackButton() method, subject to checks and save warnings before returning to the dashboard.
+    backBtn.addEventListener("click", handleBackButton);
+    
+    // Playlist management buttons
+    document.getElementById("add-playlist-btn").addEventListener("click", handleAddPlaylist);
+    document.getElementById("new-playlist-btn").addEventListener("click", handleCreateEmptyPlaylist);
+
+    // For any checkbox change in the table body, handle toggle with reference to the event target
+    document.getElementById("table-body").addEventListener("change", (e) => {
+        if (e.target.type === "checkbox") {
+            handleCheckboxToggle(e.target);
+        }
+    });
+
+    // Prevent shift+click from triggering browser text selection (must intercept mousedown, not click)
+    document.getElementById("table-body").addEventListener("mousedown", (e) => {
+        if (e.shiftKey) e.preventDefault();
+    });
+    
+    //Make all checkbox cells clickable by toggling the checkbox when the cell is clicked, (unless the click is directly on the checkbox)
+    document.getElementById("table-body").addEventListener("click", (e) => {
+        const cell = e.target.closest(".track-table__checkbox");
+        if (cell && !e.target.matches("input[type='checkbox']")) {
+            const checkbox = cell.querySelector("input[type='checkbox']");
+            if (checkbox) {
+                checkbox.click(); // Trigger the checkbox's click event, which will handle the toggle logic.
+            }
+        }
+    });
+
+    // Close dropdown on outside click. 
+    document.addEventListener("click", () => closeDropdown());
+
+    // Keyboard shortcuts: Escape closes dropdown; Cmd+A / Ctrl+A selects all tracks
+    document.addEventListener("keydown", (e) => {
+        if (e.key === "Escape") {
+            closeDropdown();
+            clearSelection();
+        }
+        if ((e.metaKey || e.ctrlKey) && e.key === "a") {
+            e.preventDefault(); // prevent browser "select all text"
+            handleCmdA();
+        }
+    });
+}
+
+/** ==================
+ *  RENDERING
+ *  ==================
+ */
+
+// Full workspace refresh: invalidates filter cache, clears rendered rows, rebuilds table, updates save status.
+// Use for any structural change (track set modified, playlist added/removed, playlist duplicated).
+function refreshWorkspace(){
+    cachedFilteredIDs = null;
+    resetLoadedRows();
     renderTableHeader();
     renderTableBody();
+    updateSaveStatus();
 }
 
 //Render header for table structure. Columns for index, track info, and one for each playlist.
@@ -259,7 +335,7 @@ function renderEmptyTableBody(filteredCount){
     updateFilterCounter(0);
 }
 
-// Clears rendered rows and resets lazy-load position. Call before renderTableBody() on sort/filter change.
+// Clears rendered rows and resets lazy-load position.
 function resetLoadedRows() {
     loadedCount = 0;
     displayList = [];
@@ -351,7 +427,7 @@ function createTrackInfoCell(trackID){
     trackNameDiv.textContent = track ? track.title : trackID;
     cell.appendChild(trackNameDiv);
 
-    //Other metadata (artist and album) sits in separate div below, with a separator dot between. FUTURE: think about making these links to spotify IDs or something, opening in window or elsewhere. Since data currently comes through a third party, this would be a roundabout process to acquire for now.
+    //Artist and album sit in separate div below, with a separator dot between.
     const trackMetaDiv = document.createElement("div");
     trackMetaDiv.className = "track__meta";
 
@@ -378,7 +454,7 @@ function createTrackInfoCell(trackID){
 function createCheckboxCells(trackID){
     return playlists.map(playlist => {
     
-        //Create cell and checkbox. FUTURE: Make checkbox bigger or whole cell clickable for easier toggling.
+        //Create cell and checkbox. 
         const checkCell = document.createElement("td");
         checkCell.className = "track-table__checkbox";
         const checkbox = document.createElement("input");
@@ -395,10 +471,41 @@ function createCheckboxCells(trackID){
     });
 }
 
+/** ==================
+ *  SORT + FILTER
+ *  ==================
+ */
+
+// Helper method collects unique track IDs across playlists in first-seen order, followed by any orphaned tracks in the tracks store.
+// Only called once - at load to establish stableOrder, and by handleAddPlaylist to detect novel IDs.
+// This ensures that the intial order is the authorative source of original order for sorting and display. Only modified on add/remove track operations, shouldnt care about not on membership changes here since they have no bearing on the actual set of shown tracks, which shouldn't jump around when modified. 
+function collectTrackIDsInOrder(playlists){
+    const seen = new Set();
+    const allTrackIDs = [];
+
+    // First pass: playlist order determines initial arrival sequence.
+    for (const playlist of playlists) {
+        for (const tid of playlist.trackIDs) {
+            if (!seen.has(tid)) {
+                seen.add(tid);
+                allTrackIDs.push(tid);
+            }
+        }
+    }
+
+    // Defensive pass: append any tracks in the store not referenced by any playlist. (shouldn't normally occur).
+    for (const tid in tracks) {
+        if (!seen.has(tid)) {
+            console.warn(`Track ID ${tid} found in track store but not referenced by any playlist. Adding to stable order.`);
+            seen.add(tid);
+            allTrackIDs.push(tid);
+        }
+    }
+    return allTrackIDs;
+}
+
 // Main Sort Method: returns sorted array of trackIDs based on given criteria. 
 // Approaches include deferring to stableOrder (order-added), checking for presence in a given playlist, or original field-based sort as default strategy
-// NOTE: Missing fields currently sort to top, consider putting them at bottom for inessential metadata like BPM or genre info
-// FUTURE: Make sort output more intuitive by stripping non A-Z characters and ignoring case. Similarly strip " the" from names?
 function sortTrackIDs(trackIDs, criteria) {
 
     // "order-added": return as-is fo default, preserving stableOrder sequence. 
@@ -434,7 +541,7 @@ function sortTrackIDs(trackIDs, criteria) {
             } 
             // Tiebreak by original position in stableOrder, ensuring a deterministic result that aligns with default display behavior
             else {
-                const posA = originalPosition.get(a);// FUTURE: add a defensive high index in case a track isn't found in stable order? Shouldnt be possible
+                const posA = originalPosition.get(a);
                 const posB = originalPosition.get(b);
                 return posA - posB; // Tiebreak by original position
             }
@@ -491,6 +598,11 @@ function filterTrackIDs(trackIDs, query) {
     });
 }
 
+/** ==================
+ *  CONTROLS
+ *  ==================
+ */
+
 // Build and inject the search input into #search-controls. Called once in init()
 function initSearchControl() {
     const container = document.getElementById("search-controls");
@@ -502,7 +614,6 @@ function initSearchControl() {
     input.placeholder = "Search tracks...";
 
     // Debounce: wait 200ms to re-render after last update keystroke before re-rendering.
-    // FUTURE: Consider performance impact for big libraries. Not a concern at current scale.
     let debounceTimer;
     input.addEventListener("input", () => {
         clearTimeout(debounceTimer);
@@ -536,11 +647,11 @@ function initSortControl() {
 
     // Define options for sorting, then create and append option elements to the select.
     const options = [
-        { value: "order-added",    label: "Order Added" },//FUTURE decide on best display name: "Recently Added", "Default", "Order Added (Default)", "Added Order".
+        { value: "order-added",    label: "Order Added" },
         { value: "title",          label: "Title" },
         { value: "artist",         label: "Artist" },
         { value: "album",          label: "Album" },
-        { value: "most-playlists", label: "Most Playlists" }, //FUTURE - decide on best display name: "Most Playlists", "Playlist Count", "Most Represented"
+        { value: "most-playlists", label: "Most Playlists" },
     ];
     for (const opt of options) {
         const optionElement = document.createElement("option");
@@ -604,9 +715,9 @@ function initScrollObserver() {
     scrollObserver.observe(sentinel);
 }
 
-// Stores references to filter and selection counter elements. Both are shown/hidden by their respective update functions.//TODO Rename or group elsewhere?
-function initFilterCounter() {
-    filterCounterElement    = document.getElementById("filter-counter");
+// Store references to filter and selection counter elements. Both are shown/hidden by their respective update functions.
+function initControlCounters() {
+    filterCounterElement = document.getElementById("filter-counter"); // Could go with filter setup logic, but grouping these two makes sense for now since this is just setting up a reference.
     selectionCounterElement = document.getElementById("selection-counter");
 }
 
@@ -639,88 +750,10 @@ function updateSelectionCounter() {
     }
 }
 
-// Helper method collects unique track IDs across playlists in first-seen order, followed by any orphaned tracks in the tracks store.
-// Only called once - at load to establish stableOrder, and by handleAddPlaylist to detect novel IDs.
-// This ensures that the intial order is the authorative source of original order for sorting and display. Only modified on add/remove track operations, shouldnt care about not on membership changes here since they have no bearing on the actual set of shown tracks, which shouldn't jump around when modified. 
-function collectTrackIDsInOrder(playlists){
-    const seen = new Set();
-    const allTrackIDs = [];
-
-    // First pass: playlist order determines initial arrival sequence.
-    for (const playlist of playlists) {
-        for (const tid of playlist.trackIDs) {
-            if (!seen.has(tid)) {
-                seen.add(tid);
-                allTrackIDs.push(tid);
-            }
-        }
-    }
-
-    // Second pass: append any tracks in the store not referenced by any playlist (shouldn't normally occur).
-    for (const tid in tracks) {
-        if (!seen.has(tid)) {
-            console.warn(`Track ID ${tid} found in track store but not referenced by any playlist. Adding to stable order.`);
-            alert("Found track not referenced by any playlist. Shouldnt be happening. check log");//FUTURE: for develompent, remove later
-            seen.add(tid);
-            allTrackIDs.push(tid);
-        }
-    }
-    return allTrackIDs;
-}
-
-// Set up event listeners for checkboxes and buttons. Called once in init()
-function setupEventListeners() {
-
-    //Basic button listeners for save and back.
-    document.getElementById("save-btn").addEventListener("click", handleSave);
-    const backBtn = document.getElementById("back-btn");
-    backBtn.onclick = null; // clear the existing onclick listener, ensuring use of this button after the page renders will use the proper handleBackButton() method, subject to checks and save warnings before returning to the dashboard.
-    backBtn.addEventListener("click", handleBackButton);
-    
-    // Playlist management buttons
-    // FUTURE - Separate section with more controls: reorder, duplicate, create, delete,import/export. Plus shortcut button here for most common, create empty
-    document.getElementById("add-playlist-btn").addEventListener("click", handleAddPlaylist);
-    document.getElementById("new-playlist-btn").addEventListener("click", handleCreateEmptyPlaylist);
-
-    // For any checkbox change in the table body, handle toggle with reference to the event target
-    document.getElementById("table-body").addEventListener("change", (e) => {
-        if (e.target.type === "checkbox") {
-            handleCheckboxToggle(e.target);
-        }
-    });
-
-    // Prevent shift+click from triggering browser text selection (must intercept mousedown, not click)
-    document.getElementById("table-body").addEventListener("mousedown", (e) => {
-        if (e.shiftKey) e.preventDefault();
-    });
-    
-    //Make all checkbox cells clickable by toggling the checkbox when the cell is clicked, (unless the click is directly on the checkbox)
-    //FUTURE consider using custom component or styling to make the entire cell function as a checkbox, rather than this workaround.
-    document.getElementById("table-body").addEventListener("click", (e) => {
-        const cell = e.target.closest(".track-table__checkbox");
-        if (cell && !e.target.matches("input[type='checkbox']")) {
-            const checkbox = cell.querySelector("input[type='checkbox']");
-            if (checkbox) {
-                checkbox.click(); // Trigger the checkbox's click event, which will handle the toggle logic.
-            }
-        }
-    });
-
-    // Close dropdown on outside click. 
-    document.addEventListener("click", () => closeDropdown());
-
-    // Keyboard shortcuts: Escape closes dropdown; Cmd+A / Ctrl+A selects all tracks
-    document.addEventListener("keydown", (e) => {
-        if (e.key === "Escape") {
-            closeDropdown();
-            clearSelection();
-        }
-        if ((e.metaKey || e.ctrlKey) && e.key === "a") {
-            e.preventDefault(); // prevent browser "select all text"
-            handleCmdA();
-        }
-    });
-}
+/** ===============
+ *  ACTION HANDLERS
+ *  ===============
+ */
 
 // Handler for checkbox click event. State manipulation now happens in session counterpart.
 function handleCheckboxToggle(checkbox) {
@@ -729,7 +762,7 @@ function handleCheckboxToggle(checkbox) {
     const playlistID = checkbox.dataset.playlistID;
     session.toggleTrack(playlistID, trackID);
     // No cache invalidation needed: membership changes don't affect stableOrder or the filter result.
-    renderTableHeader();
+    renderTableHeader(); // Updates track counts in header
     updateSaveStatus();
 }
 
@@ -749,13 +782,13 @@ function updateSaveStatus() {
 }
 
 // Handler for back button: warns about empty playlists, then about unsaved changes before navigating away.
-// NOTE: Replaces behavior determined in original onclick, ensuring "Back to workspace" action is subject to save checks, only exiting immediately if a session error occurs before init is able to set up proper handlers. FUTURE: Verify nothing can go wrong while table is actually rendering, giving us a state with buttons set up but a data/table issue.
+// NOTE: Replaces behavior determined in original onclick, ensuring "Back to workspace" action is subject to save checks, only exiting immediately if a session error occurs before init is able to set up proper handlers.
 async function handleBackButton() {
 
-    // Warn if any playlist has no tracks. TODO: This whole case feels a little weird, not sure of the best prompt/options to push for users.
+    // Warn if any playlist has no tracks.
     const emptyPlaylists = playlists.filter(p => p.trackIDSet.size === 0);
     if (emptyPlaylists.length > 0) {
-        const names = emptyPlaylists.map(p => `"${p.name}"`).join(", ");//FUTURE: More elegant approach in case of long playlist set?
+        const names = emptyPlaylists.map(p => `"${p.name}"`).join(", ");
         const label = emptyPlaylists.length === 1 ? `${names} has no tracks.` : `${emptyPlaylists.length} playlists have no tracks: ${names}.`;
         const result = await warningModal({
             title: "Empty Playlist",
@@ -803,7 +836,7 @@ async function handleSave() {
         await session.save();
 
         // Pending playlists now have real IDB IDs — rebuild DOM so dataset attributes reflect them
-        if (hadPending) renderWorkspaceTable();
+        if (hadPending) refreshWorkspace();
 
         const savedTime = new Date().toLocaleTimeString();
         saveStatus.textContent = `Saved at ${savedTime}`;
@@ -825,7 +858,6 @@ async function handleSave() {
 /** ===============
  *  DROPDOWN LOGIC
  *  ===============
- * FUTURE: Extract to separate module
  */
 
 // Close any open dropdown by removing from DOM. Skips if no dropdown is open 
@@ -882,7 +914,6 @@ function openDropdown(mode=null,id,x,y) {
 
 // Build and return a dropdown panel for the given playlistID
 // NOTE: be careful handling ids, especially after multi-track case is implemented.
-// FUTURE: Probably refactoring mode approach once UI logic is more fleshed out and separated.
 function buildDropdownPanel(id,mode) {
 
     //Create div element for dropdown panel, which will be positioned and populated with items based on the given playlistID and mode.
@@ -894,7 +925,6 @@ function buildDropdownPanel(id,mode) {
     switch (mode){
         case "playlist":
             const playlistID = id;
-            //TODO rethink organization, 4 groups feels like a lot for 7 items.
             items = [
                 { label: "Select all Tracks",           action: () => handleBulkMembershipUpdate(playlistID, true) },
                 { label: "Deselect all Tracks",         action: () => handleBulkMembershipUpdate(playlistID, false) },
@@ -903,7 +933,6 @@ function buildDropdownPanel(id,mode) {
                 { divider: true },
                 { label: "Rename Playlist",             action: () => handleRenamePlaylist(playlistID) },
                 { label: "Duplicate Playlist",          action: () => handleDuplicatePlaylist(playlistID) },
-                { divider: true },
                 { label: "Remove from workspace",       action: () => handleRemovePlaylist(playlistID) },
             ];
             break;
@@ -959,15 +988,8 @@ function buildDropdownPanel(id,mode) {
     return panel;
 }
 
-/** ===============
- *  ACTION HANDLERS
- *  ===============
- * FUTURE: Extract to separate module?
- */
-
 // Handler for select/deselect all - updates membership of each shown track in a playlist to match desired state.
 // Operates on the full filtered set of trackIDs, not just the currently rendered page. 
-// FUTURE: consider additional option to select all, filtered or not
 function handleBulkMembershipUpdate(playlistID, desiredState) {
 
     // Access or recopute cachedFilteredID, using stableOrder as a base to be filtered from (implictly sorted by added order))
@@ -983,10 +1005,8 @@ function handleBulkMembershipUpdate(playlistID, desiredState) {
             session.toggleTrack(playlistID, id);
         }
     }
-    //FUTURE: Move reset and save update to renderWorkspaceTable?
-    // refreshWorkspace();
     resetLoadedRows();
-    renderWorkspaceTable();
+    refreshWorkspace();
     updateSaveStatus();
 }
 
@@ -999,7 +1019,6 @@ async function handleRenamePlaylist(playlistID) {
         title: "Rename Playlist",
         confirmLabel: "Rename",
         defaultValue: playlist.name,
-        //TODO extract to separate method? Simpler here until parameters are more consistent. Strategy pattern with validation functions for each case?        // validate:[notEmpty,noSpecialChars,unique,nameChanged(defaultValue)]
         validate: (value) => {
             if (!value) return "Name cannot be empty.";
             if (value === playlist.name) return "Name is unchanged.";
@@ -1009,7 +1028,7 @@ async function handleRenamePlaylist(playlistID) {
     if (!newName) return;
 
     session.renamePlaylist(playlistID, newName);
-    renderWorkspaceTable();
+    refreshWorkspace();
     updateSaveStatus();
 }
 
@@ -1075,7 +1094,7 @@ async function handleRemoveTrackFromAll() {
                 { label: "Cancel",                                 value: null                                        }
             ]
         });
-        if (!proceed) return;///FUTURE add toasts to confirm action?
+        if (!proceed) return;
     }
     for (const trackID of selectedTrackIDs) {
         for (const playlist of playlists) {
@@ -1085,8 +1104,6 @@ async function handleRemoveTrackFromAll() {
         }
     }
     refreshWorkspace();
-
-
 }
 
 
@@ -1095,8 +1112,7 @@ async function handleDeleteTrack() {
     if (selectedTrackIDs.size > 1) {
         const proceed = await warningModal({
             title:   "Delete Tracks",
-            // message: `Remove ${selectedTrackIDs.size} tracks from the workspace? To add it again, you'd need to add another playlist that contains the track.`,
-            message: `Remove ${selectedTrackIDs.size} tracks from the workspace? You'll need to add them via another playlist to see them again.`,//TODO this is long, find a more concise way to explain stakes (and presence in an other playlist is what matters.)
+            message: `Remove ${selectedTrackIDs.size} tracks from the workspace? The data will be lost unless they exist in another playlist.`,
             actions: [
                 { label: `Remove ${selectedTrackIDs.size} Tracks`, value: "continue", className: "modal__btn--danger" },
                 { label: "Cancel",                                 value: null                                        }
@@ -1138,31 +1154,6 @@ function handleCopyTrackID(trackID) {
     }).catch(err => {
         console.error("Failed to copy track ID:", err);
     });
-}
-
-
-// Route row click to appropriate selection behavior based on modifier keys.
-function handleTrackRowClick(trackID, rowEl, index, event) {
-    if (event.shiftKey) {
-        handleShiftClick(index, trackID, rowEl);
-    } else if (event.metaKey || event.ctrlKey) {
-        // Cmd/Ctrl+click: toggle this track individually
-        if (isTrackSelected(trackID)) {
-            deselectTrack(trackID, rowEl);
-        } else {
-            selectTrack(trackID, rowEl);
-        }
-        lastClickedTrackIndex = index;
-    } else {
-        // Plain click: exclusive select — clear all others first
-        for (const id of selectedTrackIDs) {
-            const row = document.querySelector(`tr[data-track-id="${id}"]`);
-            if (row) row.classList.remove("track-row--selected");
-        }
-        clearSelection();
-        selectTrack(trackID, rowEl);
-        lastClickedTrackIndex = index;
-    }
 }
 
 // Handler for adding existing playlists to the workspace. Fetches full library from IDB, excludes already-loaded playlists, then shows a selector modal.
@@ -1222,6 +1213,11 @@ async function handleCreateEmptyPlaylist() {
 }
 
 
+/** ==================
+ *  SELECTION
+ *  ==================
+ */
+
 // Clears all selected rows: strips .selected from the DOM, clears the Set, resets anchor index.
 function clearSelection() {
     for (const id of selectedTrackIDs) {
@@ -1252,6 +1248,30 @@ function isTrackSelected(trackID) {
     return selectedTrackIDs.has(trackID);
 }
 
+// Route row click to appropriate selection behavior based on modifier keys.
+function handleTrackRowClick(trackID, rowEl, index, event) {
+
+    // Shift key: route to shift-click handler for range selection. Doesn't update anchor index, allowing multiple shift clicks from the same anchor.
+    if (event.shiftKey) {
+        handleShiftClick(index, trackID, rowEl);
+    } 
+    // Cmd/Ctrl key: toggle this track's selection state without affecting others, update anchor to this track for potential future shift-clicks.
+    else if (event.metaKey || event.ctrlKey) {
+        // Cmd/Ctrl+click: toggle this track individually
+        if (isTrackSelected(trackID)) {
+            deselectTrack(trackID, rowEl);
+        } else {
+            selectTrack(trackID, rowEl);
+        }
+        lastClickedTrackIndex = index; //Update anchor to this track
+    }
+    // Plain click: exclusive select — clear all others, then select this one and update anchor. 
+    else {
+        clearSelection();
+        selectTrack(trackID, rowEl);
+        lastClickedTrackIndex = index; //Update anchor to this track
+    }
+}
 
 // Select/deselect a contiguous range from lastClickedTrackIndex to currentIndex.
 // Range follows anchor row's state: selects if anchor is selected, deselects if not.
@@ -1300,15 +1320,6 @@ function handleCmdA() {
 
     updateSelectionCounter();
     console.log("handleCmdA: selected", selectedTrackIDs.size, "tracks");//DEBUG
-}
-
-// Full workspace refresh: invalidates filter cache, clears rendered rows, rebuilds table, updates save status.
-// Use for any structural change (track set modified, playlist added/removed, playlist duplicated).
-function refreshWorkspace(){
-    cachedFilteredIDs = null;
-    resetLoadedRows();
-    renderWorkspaceTable();
-    updateSaveStatus();
 }
 
 init();

@@ -1,0 +1,36 @@
+#-TASKS
+
+- Add basic workspace features in -planned-features.txt. Don't rabbit hole
+    -- modals
+    -- button swap
+    -- playlist header
+    -- integrate control bar into headers?
+- Clean workspace.js: Group by functions, make session.js uses explict and document in top level comments
+- Clean session.js Group by functions, add top level comments explaining interplay with workspace.js
+
+- Refactor workspace.css: 
+    -- group sections more logically, 
+    -- add comments to separate sections and make hierarchies clear, 
+    -- consolidate redundant styling where possible,
+    -- eliminate conflicts, unintentional overrulings.
+
+- Restyle workspace.css to look more modern
+
+- Add simple README outlining workspace architecture and use. Light on dashboard details, will elaborate once its fleshed out.
+
+- Make dashboard iteration 3.
+    -- Widgets: I/O, Library, Workspace.
+    -- Modals: Import Playlists, Export Playlists, Select Workspace Playlists, Help
+
+-- Update README to reflect dashboard and general app overview
+
+- Refactor CSS to share styling between workspace and dashboard
+- Try linking spotify API, manage rate limit with query queue in dashboard I/O widget
+
+# LATER
+
+- Dashboard: Workspace widget tracks recent launches, quick way to reselect same files.
+- Workspace: Extract handlers and/or DOM builders to separate file?
+- Data Layer: Support more imported track fields?
+- Stub for similarity module with just name/duration comparison? Honestly BPM could win the day
+- Basic module for libary management? Could just offer a better view (simple collapsing views with robust sort/search went a long way) and option to open selections in workspace.

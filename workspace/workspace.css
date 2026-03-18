@@ -52,10 +52,9 @@ body {
 }
 
 /* Progress Bar */
-/* FUTURE: support determinate mode via --progress custom property + width: calc(var(--progress,0)*1%) */
 #progress-bar {
     width: 100%;
-    height: 2px; /* Thin to match 2px style throughout, but I honestly liked the thick one (5px) for visibility */
+    height: 2px;
     background-color: var(--color-header-page);
     overflow: hidden;
     flex-shrink: 0;
@@ -338,7 +337,6 @@ body {
 
 /* ========== TABLE COLUMNS ========== */
 
-/* FUTURE: widen index column if track count exceeds 1000 or 10k */
 .track-table__index {
     width: 35px;
     max-width: 40px;
@@ -363,7 +361,6 @@ body {
 }
 
 .track__meta {
-    /* TODO: Differentiate styling for artist vs album? */
     font-size: var(--font-size-metadata);
     color: var(--color-text-muted);
     overflow: hidden;
@@ -393,7 +390,6 @@ body {
     accent-color: var(--color-green);
 }
 
-/* FUTURE: add highlight for playlist rows when header is hovered? */
 tbody .track-table__checkbox:hover {
     background-color: var(--color-checkbox-row-hover);
     transition: background-color var(--transition-fast);

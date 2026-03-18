@@ -1,7 +1,12 @@
-//Session management layer for workspace. Handles loading playlists, in-memory state, and saving changes back to IDB.
+// session.js — Data layer for the workspace. Manages in-memory playlist/track state and IDB persistence.
+// workspace.js  — Consumes this session; holds live references to session.playlists, tracks, and modifiedPlaylists.
+//
+// Callers should only read data directly from session properties, ensuring data is current.
+// Callers should only mutate data using session methods, ensuring track data, trackIDs and modifiedPlaylists are properly maintained.
 
 // Data Flow: workspace session adds {playlistID, trackIDSet} fields to IDB playlist objects, facilitating rendering and membership checks. 
-//            Strips these fields before saving back to IDB.
+//            Session data is read from properties and mutated via sanctioned methods.
+//            Fields added to playlist objects are stripped before saving back to IDB.
 
 import DataManager from "../shared/dataManager.js";
 
@@ -16,6 +21,11 @@ export class WorkspaceSession {
         this.pendingCounter = 0;                 // counter for generating temp IDs
         this.dataManager = null;
     }
+
+    /** ==================
+     *  DATA LOADING
+     *  ==================
+     */
 
     // Load playlists and their tracks from IndexedDB.
     // playlistIds: array of IDB numeric 'id' keys to load. If null/empty, loads all playlists.
@@ -32,11 +42,10 @@ export class WorkspaceSession {
         if (playlistIds && playlistIds.length > 0) {
 
             // fetch each playlist by ID. 
-            //FUTURE - should probably add a bulk-get-by-IDs method to DataManager to minimize transactions
             const results = await Promise.all(
                 playlistIds.map(id => this.dataManager.getRecord("playlists", id))
             );
-            // Filter out nulls (playlist deleted or ID invalid.) FUTURE - log these or show a better warning in UI?
+            // Filter out nulls (playlist deleted or ID invalid.)
             rawPlaylists = results.filter(Boolean);
             if (rawPlaylists.length < playlistIds.length) {
                 console.warn(
@@ -84,9 +93,13 @@ export class WorkspaceSession {
         };
     }
 
+    /** ==================
+     *  PLAYLIST OPERATIONS
+     *  ==================
+     */
+
     // Fetch an existing IDB playlist by id and add it to the session.
     // No-ops if already in session. Returns the augmented playlist or null.
-    //FUTURE: honestly might not be a permanent feature, completely depends on future of dashboard / API use. Direct import via API? //Having a local copy will always be helpful for bottlenecks, so worth supporting here.
     async addPlaylist(id) {
         const raw = await this.dataManager.getRecord("playlists", id);
         if (!raw) {
@@ -132,27 +145,6 @@ export class WorkspaceSession {
         if (pendingIdx !== -1) this.pendingPlaylists.splice(pendingIdx, 1);
     }
 
-    // Remove a track from the workspace session entirely: removes from all playlists, then removes object from tracks store in memory
-    // FUTURE: Add some "orphaned tracks" feature in the dashboard to see tracks no longer represented in any playlist? For ease of use, and avoiding inaccessible data we don't need to keep around
-    removeTrackFromWorkspace(trackID) {
-        // Remove track from all playlists in the session
-        for (const playlist of this.playlists) {
-            if (playlist.trackIDSet.has(trackID)) {
-                playlist.trackIDs = playlist.trackIDs.filter(id => id !== trackID);
-                playlist.trackIDSet.delete(trackID);
-                this.modifiedPlaylists.add(playlist.playlistID);
-            }
-        }
-        
-        // Remove track from in-memory tracks lookup
-        if (this.tracks[trackID]) {
-            delete this.tracks[trackID];
-            console.log(`WorkspaceSession: Track '${trackID}' removed from tracks lookup`);
-        } else {
-            console.warn(`WorkspaceSession: removeTrackFromWorkspace: no track found for ID '${trackID}'`);
-        }
-    }
-
     // Rename a playlist in-memory. Updates in IDB on next save()
     renamePlaylist(playlistID, newName) {
         const playlist = this.playlists.find(p => p.playlistID === playlistID);
@@ -189,7 +181,6 @@ export class WorkspaceSession {
     // Create a new empty playlist in-memory using a temp ID. Updates in IDB on next save()
     createEmptyPlaylist(name) {
         const tempID = `pending-${++this.pendingCounter}`;
-        //FUTURE: enforce type using a factory function or class method. Create counterpart in models.js?
         const newPl = {
             type: "playlist",
             id: tempID,
@@ -203,9 +194,30 @@ export class WorkspaceSession {
         return newPl;
     }
 
+    /** ==================
+     *  TRACK OPERATIONS
+     *  ==================
+     */
 
-
-
+    // Remove a track from the workspace session entirely: removes from all playlists, then removes object from tracks store in memory
+    removeTrackFromWorkspace(trackID) {
+        // Remove track from all playlists in the session
+        for (const playlist of this.playlists) {
+            if (playlist.trackIDSet.has(trackID)) {
+                playlist.trackIDs = playlist.trackIDs.filter(id => id !== trackID);
+                playlist.trackIDSet.delete(trackID);
+                this.modifiedPlaylists.add(playlist.playlistID);
+            }
+        }
+        
+        // Remove track from in-memory tracks lookup
+        if (this.tracks[trackID]) {
+            delete this.tracks[trackID];
+            console.log(`WorkspaceSession: Track '${trackID}' removed from tracks lookup`);
+        } else {
+            console.warn(`WorkspaceSession: removeTrackFromWorkspace: no track found for ID '${trackID}'`);
+        }
+    }
 
     // Toggle track membership in a playlist. (replaces logic in handleCheckboxToggle, which calls this)
     // playlistId: string which should match playlist.playlistID
@@ -230,6 +242,11 @@ export class WorkspaceSession {
 
         this.modifiedPlaylists.add(playlistId);
     }
+
+    /** ==================
+     *  PERSISTENCE
+     *  ==================
+     */
 
     // Persist all pending (new) and modified playlists to IndexedDB.
     // Pending playlists are written first and their live objects patched with real IDB IDs
