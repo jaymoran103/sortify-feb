@@ -1,0 +1,162 @@
+@import './shared/base.css';
+
+/* ========== LAYOUT ========== */
+
+body {
+    background-color: var(--color-bg);
+    color: var(--color-text);
+    font-family: var(--font-family);
+    font-size: var(--font-size-base);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    margin: 0;
+    padding: 0;
+}
+
+/* ========== HEADER ========== */
+
+.header {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    height: 46px;
+    background: var(--color-header-page);
+    border-bottom: var(--standard-border);
+    padding: 0 28px;
+    flex-shrink: 0;
+}
+
+.header-wordmark {
+    font-size: 1.15em;
+    font-weight: 700;
+    color: var(--color-text);
+    letter-spacing: 0.03em;
+}
+
+.header-sep {
+    color: var(--color-text-muted);
+}
+
+.header-page-title {
+    color: var(--color-text-muted);
+    font-size: 0.9em;
+}
+
+.header-spacer {
+    flex: 1;
+}
+
+/* ========== PAGE BODY & CARDS ROW ========== */
+
+.page-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 40px 28px 72px;
+}
+
+.cards-row {
+    max-width: 980px;
+    margin: 0 auto;
+    display: flex;
+    gap: 14px;
+    align-items: flex-start;
+}
+
+/* ========== CARD SHELL ========== */
+
+.card {
+    flex: 1;
+    height: var(--card-height);
+    background: var(--color-surface);
+    border: var(--border-soft);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.card-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 13px 16px;
+    border-bottom: var(--border-soft);
+    flex-shrink: 0;
+}
+
+.card-title {
+    font-weight: 600;
+    font-size: 0.94em;
+}
+
+/* ========== I/O CARD ========== */
+
+.io-body {
+    flex: 1;
+    padding: 20px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    overflow-y: auto;
+}
+
+.card-desc {
+    font-size: 0.84em;
+    color: var(--color-text-muted);
+    line-height: 1.5;
+    margin: 0;
+}
+
+/* ========== LIBRARY CARD ========== */
+
+.library-list {
+    flex: 1;
+    overflow-y: auto;
+}
+
+.library-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 16px;
+    border-bottom: var(--border-soft);
+    font-size: var(--font-size-controls);
+    cursor: default;
+}
+.library-row:hover {
+    background-color: var(--color-surface-hi);
+}
+
+.library-row-name {
+    flex: 1;
+}
+
+.library-row-count {
+    font-size: 0.82em;
+    color: var(--color-text-muted);
+    flex-shrink: 0;
+}
+
+.library-empty {
+    padding: 20px 16px;
+    color: var(--color-text-muted);
+    font-size: var(--font-size-controls);
+}
+
+/* ========== WORKSPACE CARD ========== */
+
+.ws-body {
+    flex: 1;
+    padding: 22px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+/* Full-width button used in workspace card */
+.btn-full {
+    width: 100%;
+}

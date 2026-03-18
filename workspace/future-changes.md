@@ -33,6 +33,7 @@
 # Misc thoughts, or beyond workspace
 - Determinate progress indicators for progress bar(s) in dashboard and load process.
 - Better homes for filter/selection counters? kinda just floating in control bar for now
+- In current state, whole control bar could be integrated into header bar, simplifying table to [ Indices | All Track Stuff | All Playlist Stuff ]. I'd only feel okay with this if track header continues to not do much - header bar essentially becomes a partitioned control bar with extra height. Could also be good for the playlist title space issue.
 - Warn user of bad playlist references while loading?
 - Consider future of "open in spotify" dropdown option
 - Add some "orphaned tracks" feature in the dashboard to see tracks no longer represented in any playlist? For ease of use, and avoiding inaccessible data we don't need to keep around

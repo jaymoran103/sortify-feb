@@ -1,3 +1,5 @@
+//commmit message: 
+// 
 // Lightweight modal controller. One modal open at a time.
 // DOM shell is built once on import and persists in the body; visibility toggled via modal-overlay--visible.
 
@@ -25,9 +27,9 @@ class ModalController {
 
         // Persistent buttons for standard confirm/cancel path. Actions path builds buttons dynamically per open().
         this._cancelBtn  = document.createElement("button");
-        this._cancelBtn.className  = "modal__btn modal__btn--cancel";
+        this._cancelBtn.className  = "modal__btn--cancel";
         this._confirmBtn = document.createElement("button");
-        this._confirmBtn.className = "modal__btn modal__btn--confirm";
+        this._confirmBtn.className = "modal__btn--confirm";
 
         modal.appendChild(this._titleEl);
         modal.appendChild(this._bodyEl);
@@ -38,8 +40,6 @@ class ModalController {
         this._resolve    = null;
         this._keyHandler = null;
 
-        //NOTE: Not a factor yet, adding for critical modals where user action is required (exit without saving, big data issues) Would use a method like attemptClose() as replacement, keeping close as an authoritative exit method.
-        this.cancelAllowed = true; 
 
         // Backdrop click equates to cancel.
         this._overlay.addEventListener("click", (e) => {
@@ -101,15 +101,6 @@ class ModalController {
 
         return new Promise(resolve => { this._resolve = resolve; });
     }
-
-    //FUTURE: Method to prevent critical dialogs from closing without proper input. Check cancelAllowed field, calling proper close method or re-emphasizing modal
-    // attemptClose(){
-    //     if (this.cancelAllowed) {
-    //         this.close(null);
-    //     } else {
-    //         //emphasize on screen somehow, making clear action is required.
-    //     }
-    // }
 
     close(result) {
         this._overlay.classList.remove("modal-overlay--visible");
@@ -334,6 +325,62 @@ export function playlistSelectModal({ title = "Select Playlists", confirmLabel =
         onConfirm() {
             if (selectedIds.size === 0) return;
             _modal.close([...selectedIds]);
+        }
+    });
+}
+
+
+// Open a menu-choice modal: a list of clickable action rows, each closing the modal with its value.
+// Currently uses buttons as rows, with wrapper inside for potential additional content.
+// choices: [{ label value, primary? }]
+// Returns the value of the clicked choice, or null if cancelled/dismissed.
+export function menuModal({ title, choices = [], cancelLabel = "Cancel", hint } = {}) {
+    return _modal.open({
+        title,
+        showCancel: false,
+        actions: [],
+        body(container) {
+
+            // Optional hint text above the choices
+            if (hint) {
+                const hintEl       = document.createElement("p");
+                hintEl.className   = "modal__message";
+                hintEl.textContent = hint;
+                hintEl.style.marginBottom = "4px";
+                container.appendChild(hintEl);
+            }
+
+            // One button row per choice — clicking immediately closes with that choice's value
+            for (const choice of choices) {
+                const btn = document.createElement("button");
+                btn.className = "modal__menu-btn";
+
+                //no emphasis for now
+                if (choice.primary) {
+                    btn.classList.add("modal__menu-btn--primary");
+                }
+
+                //Wrapper for additional content for future buttons- likely icons or secondary text
+                const textWrap = document.createElement("span");
+                textWrap.className = "modal__menu-btn-text";
+
+                const labelSpan       = document.createElement("span");
+                labelSpan.className   = "modal__menu-btn-label";
+                labelSpan.textContent = choice.label;
+                textWrap.appendChild(labelSpan);
+
+                btn.appendChild(textWrap);
+                btn.addEventListener("click", () => _modal.close(choice.value ?? null));
+                container.appendChild(btn);
+            }
+
+            // Cancel button at bottom of body (styled as footer-level action but inside body flow)
+            const cancelBtn       = document.createElement("button");
+            cancelBtn.className   = "modal__btn--cancel";
+            cancelBtn.textContent = cancelLabel;
+            cancelBtn.style.marginTop = "4px";
+            cancelBtn.addEventListener("click", () => _modal.close(null));
+            container.appendChild(cancelBtn);
         }
     });
 }

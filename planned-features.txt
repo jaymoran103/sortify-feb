@@ -1,0 +1,38 @@
+For vanilla implementation:
+
+Workspace Features
+[x] Warnings before big actions: remove track from workspace, leave without saving, leave with empty playlist¨¨¨
+[x] Fix dropdown position adjustment: should be bumping coordinates if too close to the right or bottom
+- Column resizing: separate info and playlist sides, resizing handle between them
+[x] Base sort: Cache an unchanging array of trackIDs, first-seen order from playlists. Stable set is only updated when the track set itself changes (only on add/remove from session)
+    - When tracks are removed (via track control) do spot removal from order cache, avoiding need for a re-sort.
+    - When tracks are added (via new playlist) they'll add to the end, not-yet-seen tracks can do the same in the cached list.
+    - IF tracks were rearranged, (not currently possible, playlists dont move and there's no promised track order to change) update should be deferred to the next time a sort or filter changes the displayed rows.
+[x] Sort by playlist: Update a cached 'current' sort list to prioritize THAT playlist. Valid case to adjust the cached set, since the user will expect the resulting update. This added complexity isn't worth it atm.
+[x] Ensure 'back to workspace' button on error page works, or is hidden. Same for any other buttons.
+
+Workspace Layout
+[] Consolidate to single "Add Playlist" Button: Modal for empty, import, or duplicate. Select name there. Waiting to see how hiding might shake out, cause then we'd want 2 buttons again
+[x] Add playlist button(s) sits on control bar right, save control moves to top right, "back to dashboard" moves to top left.
+[] Playlist header detail: number of tracks, better button look and placement.
+
+Workspace Inessential
+- Playlist Locking, Hiding, Coloring
+- Sort by playlist
+- Playlist header detail: # unique, total runtime?
+[x] Implement a "most playlists" sort method using the same logic the similarity checker will use? 
+- support field-specific queries - artist:queen, album:blonde, even duration:>300? No current need for these
+- Sort by overlap: Most represented to least. Decide when order refreshes, might be easier to just bump sort back to "Select" default whenever user action contradicts existing sort. Gotta be a design pattern for this.
+
+Dashboard Priorities
+- Library Overview: scrollable widget with playlists, expandable to show track rows, or in accompanying "playlist overview"
+- Import Control: Button to import playlists. will open up a window prompting use to select import via local files, or the spotify API.
+- Import status indicator? Dashboard or import window could show progress as the full set of playlists is imported. CSV import can take up to 10 seconds (but predictable since # of files and progress are easily trackable) and spotify API will take much longer.
+- Export Control: Same as import, let user choose export mode: local files, spotify API.
+- Workspace launcher: determine playlists selection, likely via popup or expanded window space, opening workspace with selections upon confirmation.
+- Workspaces management? possibly track different sets of playlists selected for the workspace, letting the user continue work on a project later.
+
+Big Question: 
+Should workspace sessions be their own distinct data source of truth? 
+More emphasis on their creation, but could save more quickly without big implications for IDB records. 
+Make them saveable in their own right in IDB during sessions, and big JSON files locally. Easy to pick up, put down, duplicate.

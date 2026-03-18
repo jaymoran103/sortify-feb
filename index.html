@@ -1,49 +1,60 @@
 <!DOCTYPE html>
 <html lang="en">
-    <head>
-        <meta charset="utf-8">
-        <title>Playlist Manager Test</title>
-        <h1>Playlist Manager</h1>
+<head>
+    <meta charset="utf-8">
+    <title>Sortify</title>
+    <link rel="stylesheet" href="dashboard.css">
+</head>
+<body>
+    <!-- Header: Provides navigation and page title -->
+    <header class="header">
+        <span class="header-wordmark">Sortify</span>
+        <span class="header-sep">/</span>
+        <span class="header-page-title">Dashboard</span>
+        <div class="header-spacer"></div>
+    </header>
 
-        <link rel="stylesheet" href="style.css">
-    </head>
-    <body>  
+    <div class="page-body">
+        <div class="cards-row">
 
-        <!-- I/O Section handles import and export of playlists -->
-        <div id="io-container">
-            <h2>Playlist I/O</h2>
-            <div id="progress-bar"></div> <!-- FUTURE: Find more fitting indicator for this page once fleshed out -->
-            <button id="importButton">Import</button>
-            <input type="file" id="csvFileInput" accept=".csv" multiple hidden />
-            <span id="file-count-label"></span>
-            <button id="exportButton">Export</button>
-        </div>
-
-        <!-- Library Section provides controls for managing playlists -->
-        <div id="util-buttons-container">
-            <h2>Library</h2>
-            <button id="viewAllPlaylistsButton">View All</button>
-            <button id="clearDisplayButton">Clear Display</button>
-            <button id="clearStorageButton">Clear Storage</button>
-        </div>
-
-        <!-- Workspace Section provides controls for launching the workspace -->
-        <div id="workspace-container">
-            <h2>Workspace</h2>
-            <button id="open-workspace-all-btn">Open Workspace (All Playlists)</button>
-            <button id="open-workspace-select-btn">Open Workspace (Select Playlists)</button>
-            <div id="playlist-select-panel">
-                <strong>Select playlists to open in workspace:</strong>
-                <div></div> <!-- Leaving buttons above display list, in case many playlists are available. FUTURE: find better look-->
-                <button id="confirm-select-btn">Open in Workspace</button>
-                <button id="cancel-select-btn">Cancel</button>
-                <div id="playlist-select-list" style="margin: 8px 0;"></div>
-                
+            <!-- I/O Card: Provides buttons to import and export playlists -->
+            <div class="card">
+                <div class="card-header">
+                    <span class="card-title">Import / Export</span>
+                </div>
+                <div class="io-body">
+                    <button id="import-btn">Import Playlists</button>
+                    <button id="export-btn">Export Playlists</button>
+                </div>
             </div>
-        </div>
 
-        
-        <div id="playlist-container"></div>
-    </body>
+            <!-- Library Card: Provides simple display of available playlists -->
+            <div class="card">
+                <div class="card-header">
+                    <span class="card-title">Library</span>
+                </div>
+                <div class="library-list" id="library-list">
+                    <!-- Populated by app.js on init -->
+                </div>
+            </div>
+
+            <!-- Workspace Card: Provides button to select playlists and open workspace -->
+            <div class="card">
+                <div class="card-header">
+                    <span class="card-title">Open Workspace</span>
+                </div>
+                <div class="ws-body">
+                    <p class="card-desc">Select a set of playlists to open for side-by-side track editing.</p>
+                    <button class="btn-full" id="open-workspace-btn">Select Playlists</button>
+                </div>
+            </div>
+
+        </div><!-- /cards-row -->
+    </div><!-- /page-body -->
+
+    <!-- Hidden file input for CSV import -->
+    <input type="file" id="csvFileInput" accept=".csv" multiple hidden>
+
     <script type="module" src="app.js"></script>
+</body>
 </html>

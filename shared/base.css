@@ -2,6 +2,7 @@
 
 :root {
     /* Colors */
+    /* TODO update variable names: green->accent, red->danger, name-border -> border-name */
     --color-bg:                 #212121;
     --color-header-page:        #222;
     --color-header-table:       #222;
@@ -14,16 +15,23 @@
     --color-text-muted:         #888;
     --color-button-text:        #000;
     
-    /*--color-blue:              rgb(73, 121, 205);/*Why not*/
-    /*--color-blue--hover:              rgb(99, 149, 234);/*Why not*/
-    
     --color-green:              rgb(56, 137, 65); /*FUTURE: Green->Accent?*/
-    --color-green-hover:        rgb(79, 198, 46); 
+    --color-green-hover:        rgb(56, 214, 83); 
+    --color-button-primary:  #2be31a;
+    --color-button-cancel:   #9e9da9;
+    --color-button-cancel-hover:   rgb(130, 130, 130);
 
     --color-disabled:           rgb(120, 120, 120);
     --color-red:                rgb(198, 49, 49); /* FUTURE: Red->danger/warning/error?*/
     --color-red-hover:          rgb(255, 113, 113);
 
+    /* Surface hierarchy */
+    --color-surface:            #272727; /* card body background, one step above --color-bg */
+    --color-surface-hi:         #313131; /* hover/highlight within a surface */
+    --border-soft:              2px solid #3a3a3a; /* softer separator for card internals */
+    --border-emphasized:        2px solid #fff; /* for emphasis on important elements like selected rows */
+    --card-height:              640px;   /* shared fixed height for dashboard cards */ 
+ 
     /* Fonts */
     --font-family:        sans-serif;
     --font-size-base:     1em;
@@ -32,7 +40,7 @@
     --font-size-metadata: 0.9em;
 
     /* Borders */
-    --standard-border:  2px solid var(--color-border);
+    --standard-border:  2px solid var(--color-border); /* TODO change convention to --border-standard / --border-light / --border-soft??*/
     /* --light-border:     1px solid var(--color-border); */
     /* --soft-border:     1px solid #222; */
 
@@ -70,6 +78,7 @@ button {
     height: 32px;
     vertical-align: middle;
     font-size: var(--font-size-button);
+    /* border: var(--standard-border); */
 }
 button:disabled {
     background-color: var(--color-disabled);
@@ -125,7 +134,7 @@ button:hover:not(:disabled) {
 .modal__input {
     background-color: var(--color-bg);
     color: var(--color-text);
-    border: var(--standard-border);
+    /* border: var(--standard-border); */
     padding: 4px 8px;
     height: 32px;
     width: 100%;
@@ -159,17 +168,12 @@ button:hover:not(:disabled) {
     border: var(--standard-border);
     transition: background-color var(--transition-fast);
 }
-.modal__btn--cancel {
-    background-color: var(--color-row-hover);
-    color: var(--color-text);
-}
-.modal__btn--cancel:hover {
-    background-color: var(--color-row-selected);
-}
 .modal__btn--confirm,
 .modal__btn--primary {
     background-color: var(--color-green);
     color: var(--color-button-text);
+    border: var(--standard-border);
+
     /* border-color: transparent; */
 }
 .modal__btn--confirm:hover,
@@ -180,6 +184,15 @@ button:hover:not(:disabled) {
 .modal__btn--primary:disabled {
     background-color: var(--color-disabled);
     cursor: default;
+}
+.modal__btn--cancel {
+    background-color: var(--color-button-cancel);
+    border: var(--standard-border);
+
+    /* color: var(--color-text); */
+}
+.modal__btn--cancel:hover {
+    background-color: var(--color-button-cancel-hover);
 }
 .modal__btn--danger {
     /* background-color: transparent; */
@@ -263,4 +276,55 @@ button.modal__btn--danger:hover {
     color: var(--color-text-muted);
     align-self: center;
     margin-right: auto;
+}
+
+/* Button variant for menu rows */
+.modal__menu-btn {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    height: 50px;
+    padding: 12px 14px;
+    background-color: var(--color-green);
+    color: var(--color-button-text);
+    cursor: pointer;
+    border: var(--standard-border);
+
+    /* text-align: left; */
+    /* font-size: var(--font-size-controls); */
+    transition: background-color var(--transition-fast);
+}
+.modal__menu-btn:hover {
+    /* color: var(--color-text);     */
+    /* background-color: var(--color-green-hover); */
+    text-decoration: none;/* no underline */
+}
+.modal__menu-btn--primary {
+    /* color: var(--color-text);     */
+    background-color: var(--color-green); /* No difference for now */
+    /* border: var(--border-emphasized); */
+}
+/* override base button hover for primary menu rows */
+.modal__menu-btn--primary:hover {
+    /* No difference for now */    
+    background-color: var(--color-green-hover);
+}
+
+.modal__menu-btn-text {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+.modal__menu-btn-label {
+    display: block;
+}
+.modal__menu-btn-sub {
+    display: block;
+    font-size: 0.78em;
+    color: var(--color-text-muted);
+}
+.modal__menu-btn--primary .modal__menu-btn-sub {
+    color: rgba(255,255,255,0.55);
 }

@@ -1,314 +1,205 @@
+//Commit message: 
+
 import DataManager from "./shared/dataManager.js";
 import Importer from "./shared/importer.js";
-import { renderPlaylistTable } from "./shared/ui.js";
+import { menuModal, notifyModal, playlistSelectModal } from "./shared/modal.js";
 
-class AppIteration2{
+class DashboardApp {
 
-    constructor(){
+    constructor() {
         this.dataManager = new DataManager();
-        this.importer = new Importer();
+        this.importer    = new Importer();
 
         this.dataManager.init().then(() => {
-            console.log("Database initialized successfully");
+            console.log("Database initialized");
             this.addEventListeners();
-        }).catch((error) => {
-            console.error("Failed to initialize database:", error);
+            this.renderLibrary();
+        }).catch((err) => {
+            console.error("Failed to initialize database:", err);
         });
     }
 
     addEventListeners() {
-        document.getElementById("viewAllPlaylistsButton").addEventListener("click", this.handleViewAllPlaylists.bind(this));
-        document.getElementById("clearDisplayButton").addEventListener("click", this.handleClearDisplay.bind(this));
-        document.getElementById("clearStorageButton").addEventListener("click", this.handleClearStorage.bind(this));
-
-        document.getElementById("importButton").addEventListener("click", this.handleImport.bind(this));
-        document.getElementById("exportButton").addEventListener("click", this.handleExport.bind(this));
-        document.getElementById("open-workspace-all-btn").addEventListener("click", this.handleOpenWorkspaceAll.bind(this));
-        document.getElementById("open-workspace-select-btn").addEventListener("click", this.handleOpenWorkspaceSelect.bind(this));
+        document.getElementById("import-btn").addEventListener("click", this.handleImport.bind(this));
+        document.getElementById("export-btn").addEventListener("click", this.handleExport.bind(this));
+        document.getElementById("open-workspace-btn").addEventListener("click", this.handleOpenWorkspace.bind(this));
     }
 
-    // Handle button click to open workspace with ALL playlists 
-    async handleOpenWorkspaceAll() {
-        console.log("Button clicked: Open Workspace (all playlists)");
-        let allPlaylists;
-        try {
-            allPlaylists = await this.dataManager.getAllRecords("playlists");
-        } catch (err) {
-            console.error("Failed to fetch playlists for workspace:", err);
-            return;
-        }
+    // ====== I/O CARD ==========================================
 
-        if (!allPlaylists || allPlaylists.length === 0) {
-            this.showWarning("No playlists in IndexedDB — import some first");
-            return;
-        }
-
-        const ids = allPlaylists.map(p => p.id);
-        this.openWorkspaceWithPlaylists(ids);
-    }
-
-    // Handle button click to open workspace with selected playlists - shows selection UI first
-    async handleOpenWorkspaceSelect() {
-        console.log("Button clicked: Open Workspace (select playlists)");
-        let allPlaylists;
-        try {
-            allPlaylists = await this.dataManager.getAllRecords("playlists");
-        } catch (err) {
-            console.error("Failed to fetch playlists for selection UI:", err);
-            return;
-        }
-
-        if (!allPlaylists || allPlaylists.length === 0) {
-            this.showWarning("No playlists in IndexedDB — import some first");
-            return;
-        }
-
-        this.showPlaylistSelectionUI(allPlaylists);
-    }
-
-    // Render a simple selection panel  - display each playlist with its name, track count, and a checkbox for selection.
-    showPlaylistSelectionUI(playlists) {
-        const panel = document.getElementById("playlist-select-panel");
-        const list = document.getElementById("playlist-select-list");
-
-        // Render each playlist as a checkbox item with name and track count. 
-        // Checkbox values are playlist ids 
-        list.innerHTML = playlists.map(pl => `
-            <label style="display:block; padding: 4px 0; cursor:pointer;">
-                <input type="checkbox" class="playlist-select-checkbox" value="${pl.id}" unchecked />
-                ${pl.name} &mdash; ${(pl.trackIDs || []).length} tracks
-            </label>
-        `).join("");
-
-        panel.style.display = "block";
-        console.log(`Opened selection panel with ${playlists.length} playlists`);
-
-        // One-time confirm handler
-        document.getElementById("confirm-select-btn").addEventListener("click", () => {
-            const checked = [...list.querySelectorAll(".playlist-select-checkbox:checked")];
-            const selectedIds = checked.map(cb => Number(cb.value)); // IDB ids are numeric
-            this.cleanupSelectorUI();
-
-            if (selectedIds.length === 0) {
-                this.showWarning("No playlists selected. Please check at least one playlist to open the workspace.");
-                return;
-            }
-
-            console.log("Selected playlist IDs:", selectedIds);
-            this.openWorkspaceWithPlaylists(selectedIds);
+    // Show menu to choose import source, then trigger appropriate flow;
+    async handleImport() {
+        const choice = await menuModal({
+            title: "Import Playlists",
+            choices: [
+                { label: "From Local Files", value: "local", primary: true },
+                { label: "From Spotify",     value: "spotify" }
+            ]
         });
 
-        document.getElementById("cancel-select-btn").addEventListener("click", () => {
-            console.log("Playlist selection cancelled");
-            this.cleanupSelectorUI();
-        });
-    }
-
-    // Helper method: hides selector panel and strips event listeners by replacing buttons with clones.
-    // FUTURE - works fine, but better just to create the panel once and show/hide as needed? This probably isnt a permanent feature so im not going too deep rn.
-    cleanupSelectorUI(){
-        const panel = document.getElementById("playlist-select-panel");
-        panel.style.display = "none";
-
-        const confirmBtn = document.getElementById("confirm-select-btn");
-        confirmBtn.replaceWith(confirmBtn.cloneNode(true));
-
-        const cancelBtn = document.getElementById("cancel-select-btn");
-        cancelBtn.replaceWith(cancelBtn.cloneNode(true));
-    }
-
-    // Save playlist IDs to sessionStorage and navigate to workspace.
-    // FUTURE add session format to models.js: { playlistIds: number[], timestamp: string }
-    openWorkspaceWithPlaylists(playlistIds) {
-        const workspaceSession = {
-            playlistIds,
-            timestamp: new Date().toISOString()
-        };
-        sessionStorage.setItem("workspaceSession", JSON.stringify(workspaceSession));
-        console.log("Saved workspaceSession to sessionStorage:", workspaceSession);
-        window.location.href = "workspace/workspace.html";
-    }
-
-    // Handle button click to display all playlists (wraps showAllPlaylists)
-    handleViewAllPlaylists(){
-        console.log("Button clicked: View All Playlists");
-        this.showAllPlaylists();
-    }
-
-    //Handle button click to clear display (wraps clearDisplay)
-    handleClearDisplay() {
-        console.log("Button clicked: Clear Display");
-        this.clearDisplay();
-    }
-
-    // Handle button click to clear all records in both stores.
-    async handleClearStorage() {
-        console.log("Button clicked: Clear Storage");
-        for (const storeName of ["tracks", "playlists"]){
-            try {
-                await this.dataManager.clearRecords(storeName);
-                console.log(`All records in ${storeName} deleted successfully`);
-            }
-            catch (error) {
-                console.error(`Error deleting all records in ${storeName}:`, error);
-            }        
+        if (choice === "local") {
+            await this.runLocalImport();
+        } else if (choice === "spotify") {
+            await this.notAvailable();
         }
-
-        //clear display to reflect cleared storage
-        this.clearDisplay();
+        // null = cancelled, do nothing
     }
 
-    // Handler for file selection event: update label, trigger import, display results
-    async handleImport(){
+    // Show menu to choose export destination, then trigger appropriate flow; Neither is implemented yet.
+    async handleExport() {
+        const choice = await menuModal({
+            title: "Export Playlists",
+            choices: [
+                { label: "To Local Files", value: "local", primary: true },
+                { label: "To Spotify",     value: "spotify" }
+            ]
+        });
 
-        //Report action to console
-        console.log("Import button clicked");
+        if (choice === "local") {
+            await this.notAvailable("CSV export");
+        } else if (choice === "spotify") {
+            await this.notAvailable("Spotify export");
+        }
+    }
 
-        //Get files from selector, returning if empty/undefined
+    // Trigger file picker, then run import; refresh library on success.
+    async runLocalImport() {
         const files = await this.doFileSelection();
-        if (!files || files.length === 0) {
-            this.showWarning("No files selected for import", "warn");
-            return;
-        }
+        if (!files || files.length === 0) return;
 
-        //update label to indicate state on page, show progress bar
-        const label = document.getElementById("file-count-label");
-        label.textContent = "loading playlists...";
-
-        await showProgressBar(); // Show loading indicator, hidden at method end.
-
-        //Perform import 
         await this.importFiles(files);
-
-        //Refresh display to show new playlists (using non-handler functions)
-        this.clearDisplay();
-        await this.showAllPlaylists();
-
-        //reset file input, label, and progress bar for next import
-        document.getElementById("csvFileInput").value = "";
-        document.getElementById("file-count-label").textContent = "";
-        hideProgressBar();          
+        // Re-render library to reflect newly imported playlists
+        this.renderLibrary();
     }
 
-    //Prompt user to select files, resolving with selection(s) once dialog closes.
-    doFileSelection(){
+    // Prompt user to select CSV files; resolves with selection once dialog closes.
+    doFileSelection() {
         return new Promise((resolve) => {
-            const fileInput = document.getElementById("csvFileInput");
-            fileInput.addEventListener("change", () => resolve(Array.from(fileInput.files)), { once: true });
-            fileInput.addEventListener("cancel",  () => resolve([]),                          { once: true });
-            fileInput.click();
+            const input = document.getElementById("csvFileInput");
+            input.addEventListener("change", () => resolve(Array.from(input.files)), { once: true });
+            input.addEventListener("cancel",  () => resolve([]),                        { once: true });
+            input.click();
         });
     }
 
-    // Carries out import flow: for each file, attempt to import to IDB, tally successes and failures, report results to console.
+    // Loop files, import each, tally results, report to console.
     async importFiles(files) {
-
-        //For each file, try to import, tracking successes and failures
         let successCount = 0;
-        let failCount = 0;
+        let failCount    = 0;
         this.importer.resetStats();
-        
+
         for (let i = 0; i < files.length; i++) {
             const file = files[i];
             try {
-                console.log(`Importing file ${i+1} of ${files.length}: '${file.name}'`);
+                console.log(`Importing file ${i + 1} of ${files.length}: '${file.name}'`);
                 await this.importer.importPlaylistCSV(this.dataManager, file);
                 successCount++;
-            } catch (error) {
-                console.error(`Failed to import '${file.name}':`, error);
+            } catch (err) {
+                console.error(`Failed to import '${file.name}':`, err);
                 failCount++;
             }
         }
 
-        console.log(`Import completed: ${successCount} successful, ${failCount} failed.`)
+        console.log(`Import complete: ${successCount} succeeded, ${failCount} failed.`);
         console.log(`  Total tracks processed: ${this.importer.totalTracksProcessed}`);
-        console.log(`  Unique tracks added: ${this.importer.uniqueTracksAdded}`);
+        console.log(`  Unique tracks added:    ${this.importer.uniqueTracksAdded}`);
         console.log(`  Invalid tracks skipped: ${this.importer.invalidTracksSkipped}`);
     }
 
-    async handleExport(){
-        console.log("Export button clicked - not yet implemented");
-    }
+    // ====== LIBRARY CARD ==========================================
 
-    //Gets all playlists from database, rendering a table for each.
-    async showAllPlaylists(){
+    // Load all playlists from IDB and render name+count rows into #library-list.
+    // Uses a document fragment to avoid repeated reflows on large libraries.
+    async renderLibrary() {
+        const container = document.getElementById("library-list");
+        container.innerHTML = "";
 
-        //Try to retrieve all playlists from database
-        let records;
+        let playlists;
         try {
-            records = await this.dataManager.getAllRecords("playlists");
-        }
-        catch (error) {
-            console.error("Error retrieving all playlists:", error);
+            playlists = await this.dataManager.getAllRecords("playlists");
+        } catch (err) {
+            console.error("Failed to load library:", err);
+            return;
         }
 
-        //If records exist, try to render each as table
-        if (records && records.length > 0) {
-            try{
-                for (const record of records){
-                    await renderPlaylistTable(this.dataManager, record);
-                }
-            }
-            catch (error){
-                console.error("Error rendering playlist tables:", error);
-            }
-        } else {
-            this.showWarning("No playlists found in the database - import some first");
+        if (!playlists || playlists.length === 0) {
+            const empty       = document.createElement("p");
+            empty.className   = "library-empty";
+            empty.textContent = "No playlists yet — import some to get started.";
+            container.appendChild(empty);
+            return;
         }
+
+        // Build all rows off-DOM, then insert in one operation
+        const fragment = document.createDocumentFragment();
+        for (const pl of playlists) {
+            const row     = document.createElement("div");
+            row.className = "library-row";
+
+            const nameSpan       = document.createElement("span");
+            nameSpan.className   = "library-row-name";
+            nameSpan.textContent = pl.name;
+
+            const countSpan       = document.createElement("span");
+            countSpan.className   = "library-row-count";
+            const n               = pl.trackIDs?.length ?? 0;
+            countSpan.textContent = `${n} track${n !== 1 ? "s" : ""}`;
+
+            row.appendChild(nameSpan);
+            row.appendChild(countSpan);
+            fragment.appendChild(row);
+        }
+
+        container.appendChild(fragment);
+        console.log(`Library rendered: ${playlists.length} playlists`);
     }
 
-    // Clears playlist display container on page
-    clearDisplay(){
-        const container = document.getElementById('playlist-container');
-        container.innerHTML = '';
+    // ====== WORKSPACE CARD ==========================================
+
+    // Load playlists, show selection modal, then open workspace with chosen playlist IDs in sessionStorage.
+    async handleOpenWorkspace() {
+        let playlists;
+        try {
+            playlists = await this.dataManager.getAllRecords("playlists");
+        } catch (err) {
+            console.error("Failed to load playlists for workspace selector:", err);
+            return;
+        }
+
+        if (!playlists || playlists.length === 0) {
+            await notifyModal({ title: "No Playlists", message: "Import some playlists first before opening the workspace." });
+            return;
+        }
+
+        // playlistSelectModal returns an array of selected IDB ids, or null if cancelled
+        const selectedIds = await playlistSelectModal({
+            title:        "Select Playlists",
+            confirmLabel: "Open Workspace →",
+            playlists
+        });
+
+        if (!selectedIds || selectedIds.length === 0) return;
+
+        this.openWorkspaceWithPlaylists(selectedIds);
+    }
+
+    // Write session to sessionStorage and navigate to workspace.
+    openWorkspaceWithPlaylists(playlistIds) {
+        const session = { playlistIds, timestamp: new Date().toISOString() };
+        sessionStorage.setItem("workspaceSession", JSON.stringify(session));
+        console.log("Opening workspace with playlists:", playlistIds);
+        window.location.href = "workspace/workspace.html";
     }
 
 
-
-
-    //Helper method shows a warning message in console and as an alert on page. 
-    //For ease of testing without always checking console.
-    showWarning(message,logMode="warn",source=null){
-        //Show alert: for errors, just refer to console.
-        if (logMode === "error") {
-            alert("Error: see console for details"  );
-        } else {
-            alert(message);
-        }
-
-        //if given a source, preface console message with it.
-        if (source) {
-            message = `[${source}] ${message}`;
-        }
-
-        //log message to console with appropriate level. default to log here, but default method arg is "warn"
-        if (logMode === "error") {
-            console.error(message);
-        } else if (logMode === "warn") {
-            console.warn(message);
-        } else {
-            console.log(message);
-        }
+    // Placeholder for features not yet implemented, shows a simple "coming soon" modal.
+    async notAvailable(featureName = "This feature") {
+        await notifyModal({ title: "Coming Soon", message: `${featureName} is not yet available.` });
     }
-
-
-
-
 
 }
 
-async function showProgressBar() {
-    document.getElementById("progress-bar").classList.add("loading");
-    await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r))); // yield so browser paints bar before load
-}
-function hideProgressBar() {
-    document.getElementById("progress-bar").classList.remove("loading");
-}
-
-
-const app = new AppIteration2();
-
-
+const app = new DashboardApp();
 
 
 
