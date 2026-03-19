@@ -1,5 +1,6 @@
 For vanilla implementation:
 
+
 Workspace Features
 [x] Warnings before big actions: remove track from workspace, leave without saving, leave with empty playlist¨¨¨
 [x] Fix dropdown position adjustment: should be bumping coordinates if too close to the right or bottom
@@ -31,6 +32,12 @@ Dashboard Priorities
 - Export Control: Same as import, let user choose export mode: local files, spotify API.
 - Workspace launcher: determine playlists selection, likely via popup or expanded window space, opening workspace with selections upon confirmation.
 - Workspaces management? possibly track different sets of playlists selected for the workspace, letting the user continue work on a project later.
+
+Dashboard Inessential
+- Library utils: 'manage' option to remove specific playlists or clear while db.
+- Library Review: check for playlists with duplicate names and tracklists, indicating possible overlap. Sort by smallest playlists?
+- Similarity Stub: rudimentary feature to scan library for playlists with high overlap. Leveraging inverted index, this would double as a "find playlists with track" feature
+- workspace launch suggestions: dont wanna get too deep into this, but simple tools to bring certain candidates to the top: playlist name match, "My Playlist #N", anythign with "copy" in name
 
 Big Question: 
 Should workspace sessions be their own distinct data source of truth? 

@@ -30,7 +30,7 @@
     --color-surface-hi:         #313131; /* hover/highlight within a surface */
     --border-soft:              2px solid #3a3a3a; /* softer separator for card internals */
     --border-emphasized:        2px solid #fff; /* for emphasis on important elements like selected rows */
-    --card-height:              640px;   /* shared fixed height for dashboard cards */ 
+    --card-height:              400px;   /* shared fixed height for dashboard cards */ 
  
     /* Fonts */
     --font-family:        sans-serif;

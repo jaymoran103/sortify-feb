@@ -2,7 +2,7 @@
 
 import DataManager from "./shared/dataManager.js";
 import Importer from "./shared/importer.js";
-import { menuModal, notifyModal, playlistSelectModal } from "./shared/modal.js";
+import { menuModal, notifyModal, warningModal, playlistSelectModal } from "./shared/modal.js";
 
 class DashboardApp {
 
@@ -23,6 +23,8 @@ class DashboardApp {
         document.getElementById("import-btn").addEventListener("click", this.handleImport.bind(this));
         document.getElementById("export-btn").addEventListener("click", this.handleExport.bind(this));
         document.getElementById("open-workspace-btn").addEventListener("click", this.handleOpenWorkspace.bind(this));
+        document.getElementById("delete-playlists-btn").addEventListener("click", this.handleDeletePlaylists.bind(this));
+        document.getElementById("clear-storage-btn").addEventListener("click", this.handleClearStorage.bind(this));
     }
 
     // ====== I/O CARD ==========================================
@@ -112,6 +114,13 @@ class DashboardApp {
     // Uses a document fragment to avoid repeated reflows on large libraries.
     async renderLibrary() {
         const container = document.getElementById("library-list");
+        const statsContainer = document.getElementById("library-stats");
+
+        if (statsContainer) {
+            statsContainer.hidden = true;
+            statsContainer.innerHTML = "";
+        }
+
         container.innerHTML = "";
 
         let playlists;
@@ -128,6 +137,36 @@ class DashboardApp {
             empty.textContent = "No playlists yet — import some to get started.";
             container.appendChild(empty);
             return;
+        }
+
+        // Compute simple library statistics. FUTURE: Cache this somewhere once I/O import sequence is more established, not worth the overhead yet. 
+        const playlistCount = playlists.length;
+        const totalTracks   = playlists.reduce((sum, pl) => sum + (pl.trackIDs?.length ?? 0), 0);
+
+        let uniqueTracks = 0;
+        try {
+            const tracks = await this.dataManager.getAllRecords("tracks");
+            uniqueTracks = tracks.length;
+        } catch (err) {
+            console.error("Failed to load unique track count:", err);
+        }
+
+        if (statsContainer) {
+            statsContainer.hidden = false;
+            statsContainer.innerHTML = `
+                <div class="library-stats-item">
+                    <span class="library-stats-value">${playlistCount}</span>
+                    <span class="library-stats-label">playlists</span>
+                </div>
+                <div class="library-stats-item">
+                    <span class="library-stats-value">${totalTracks}</span>
+                    <span class="library-stats-label">tracks</span>
+                </div>
+                <div class="library-stats-item">
+                    <span class="library-stats-value">${uniqueTracks}</span>
+                    <span class="library-stats-label">unique</span>
+                </div>
+            `;
         }
 
         // Build all rows off-DOM, then insert in one operation
@@ -152,6 +191,69 @@ class DashboardApp {
 
         container.appendChild(fragment);
         console.log(`Library rendered: ${playlists.length} playlists`);
+    }
+
+
+    // Show playlist selector, then delete each selected playlist from IDB and refresh library.
+    async handleDeletePlaylists() {
+        let playlists;
+        try {
+            playlists = await this.dataManager.getAllRecords("playlists");
+        } catch (err) {
+            console.error("Failed to load playlists for deletion:", err);
+            return;
+        }
+
+        if (!playlists || playlists.length === 0) {
+            await notifyModal({ title: "No Playlists", message: "No playlists to delete." });
+            return;
+        }
+
+        const selectedIds = await playlistSelectModal({
+            title:        "Delete Playlists",
+            confirmLabel: "Delete Selected",
+            playlists
+        });
+
+        if (!selectedIds || selectedIds.length === 0) return;
+
+        // Delete each selected playlist record from IDB
+        for (const id of selectedIds) {
+            try {
+                await this.dataManager.deleteRecord("playlists", id);
+                console.log(`Deleted playlist ${id}`);
+            } catch (err) {
+                console.error(`Failed to delete playlist ${id}:`, err);
+            }
+        }
+
+        console.log(`Deleted ${selectedIds.length} playlist(s)`);
+        this.renderLibrary();
+    }
+
+    // Confirm with user, then clear all records from both IDB stores and refresh library.
+    async handleClearStorage() {
+        const confirmed = await warningModal({
+            title:   "Clear All Storage",
+            message: "This will permanently delete all playlists and tracks. This cannot be undone.",
+            actions: [
+                { label: "Cancel",    value: false },
+                { label: "Clear All", value: true,  className: "modal__btn--danger" }
+            ]
+        });
+
+        if (!confirmed) return;
+
+        for (const storeName of ["tracks", "playlists"]) {
+            try {
+                await this.dataManager.clearRecords(storeName);
+                console.log(`Cleared ${storeName}`);
+            } catch (err) {
+                console.error(`Failed to clear ${storeName}:`, err);
+            }
+        }
+
+        this.renderLibrary();
     }
 
     // ====== WORKSPACE CARD ==========================================

@@ -112,6 +112,32 @@ body {
 
 /* ========== LIBRARY CARD ========== */
 
+.library-stats {
+    padding: 10px 16px;
+    border-bottom: var(--border-soft);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    font-size: var(--font-size-controls);
+    color: var(--color-text-muted);
+}
+
+.library-stats-item {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+}
+
+.library-stats-value {
+    font-weight: 700;
+    color: var(--color-text);
+}
+
+.library-stats-label {
+    font-weight: normal;
+    color: var(--color-text-muted);
+}
+
 .library-list {
     flex: 1;
     overflow-y: auto;
@@ -154,6 +180,15 @@ body {
     display: flex;
     flex-direction: column;
     gap: 14px;
+}
+
+/* Shared card footer — sits below the scrollable content area */
+.card-footer {
+    display: flex;
+    gap: 8px;
+    padding: 10px 16px;
+    border-top: var(--border-soft);
+    flex-shrink: 0;
 }
 
 /* Full-width button used in workspace card */
