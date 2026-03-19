@@ -3,7 +3,9 @@ import ioManager from "./shared/ioManager.js";
 import StatusIndicator from "./shared/statusIndicator.js";
 import csvImportAdapter from "./shared/adapters/csvImportAdapter.js";
 import csvExportAdapter from "./shared/adapters/csvExportAdapter.js";
-import jsonBundleExporter from "./shared/adapters/jsonBundleExporter.js";
+import jsonImportAdapter from "./shared/adapters/jsonImportAdapter.js";
+import jsonExportAdapter from "./shared/adapters/jsonExportAdapter.js";
+
 
 import { menuModal, notifyModal, warningModal, playlistSelectModal } from "./shared/modal.js";
 
@@ -97,7 +99,7 @@ class DashboardApp {
     // Prompt user to select CSV files; resolves with selection once dialog closes.
     doFileSelection() {
         return new Promise((resolve) => {
-            const input = document.getElementById("csvFileInput");
+            const input = document.getElementById("importFileInput");
             input.addEventListener("change", () => resolve(Array.from(input.files)), { once: true });
             input.addEventListener("cancel",  () => resolve([]),                        { once: true });
             input.click();
@@ -111,11 +113,20 @@ class DashboardApp {
         let failCount    = 0;
 
         for (let i = 0; i < files.length; i++) {
+
+            // determine file type from extension; skip if not .csv or .json
             const file = files[i];
+            const ext = file.name.split('.').pop().toLowerCase();
+            if (ext !== 'csv' && ext !== 'json') {
+                console.warn(`Skipping unsupported file type: ${file.name}`);
+                continue;
+            }
+
+
             // Per-file progress update
             this.status.update(i + 1, files.length, `Importing ${file.name}...`);
             try {
-                const stats = await ioManager.import('csv', this.dataManager, file);
+                const stats = await ioManager.import(ext, this.dataManager, file);//FUTURE: review use of ext as adapter reference. Fine while the keys are file types and theres just one of each, but feels like something could go awry.
                 console.log(`Imported '${file.name}': ${stats.uniqueAdded} new tracks, ${stats.skipped} skipped`);
                 successCount++;
             } catch (err) {
@@ -132,11 +143,13 @@ class DashboardApp {
     }
 
     // Register import and export adapters with ioManager, instantiate status indicator for I/O feedback
+    // FUTURE review key use 
     setupIO() {
         ioManager.registerImporter('csv',          csvImportAdapter);
+        ioManager.registerImporter('json',         jsonImportAdapter);
 
         ioManager.registerExporter('csv',          csvExportAdapter);
-        ioManager.registerExporter('jsonBundle',   jsonBundleExporter);
+        ioManager.registerExporter('jsonBundle',   jsonExportAdapter);//leaving as bundle for now
         
         this.status = new StatusIndicator(document.getElementById('io-footer'));
 

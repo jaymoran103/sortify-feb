@@ -4,8 +4,9 @@
 // Bundle format: { exportedAt, playlists[], tracks{} }
 // tracks is keyed by trackID for O(1) lookup on re-import.
 
-class JsonBundleExporter {
+class jsonExportAdapter {
 
+    // Main export method: takes an array of playlists and a dataManager for track lookup.
     async export(playlists, dataManager) {
         // Collect all unique trackIDs across all playlists
         const allIDs = new Set(playlists.flatMap(p => p.trackIDs));
@@ -38,4 +39,4 @@ class JsonBundleExporter {
     }
 }
 
-export default new JsonBundleExporter();
+export default new jsonExportAdapter();
