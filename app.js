@@ -1,8 +1,10 @@
 import DataManager from "./shared/dataManager.js";
 import ioManager from "./shared/ioManager.js";
-import importer from "./shared/adapters/csvImportAdapter.js";
-import csvImportAdapter  from "./shared/adapters/csvImportAdapter.js";
-import csvExportAdapter  from "./shared/adapters/csvExportAdapter.js";
+import StatusIndicator from "./shared/statusIndicator.js";
+import csvImportAdapter from "./shared/adapters/csvImportAdapter.js";
+import csvExportAdapter from "./shared/adapters/csvExportAdapter.js";
+import jsonBundleExporter from "./shared/adapters/jsonBundleExporter.js";
+
 import { menuModal, notifyModal, warningModal, playlistSelectModal } from "./shared/modal.js";
 
 class DashboardApp {
@@ -59,17 +61,23 @@ class DashboardApp {
         });
 
         // Local download: show format options, then export as CSV using chosen profile, then trigger download via ioManager
+        //FUTURE: Consider selecting playlists first, and estimating file sizes alongside options. Good to inform of tradeoff between minimal and native
         if (dest === "local") {
             const format = await menuModal({
                 title: "Export Format",
                 choices: [
-                    { label: "CSV — All Data",       value: "native",   primary: true },
-                    { label: "CSV — Minimal",               value: "minimal"   },
+                    { label: "CSV  (All Data)",        value: "native",   primary: true },
+                    { label: "CSV  (Minimal Data)",    value: "minimal"   },
+                    { label: "JSON (All in one file)",     value: "json"      },
                 ]
             });
-            await this.runCsvExport(format);
-        } 
-
+            if (!format) return;
+            if (format === "json") {
+                await this.runJsonExport();
+            } else {
+                await this.runCsvExport(format);
+            }
+        }
         // Spotify export: not implemented yet.
         else if (dest === "spotify") {
             await this.notAvailable();
@@ -95,14 +103,17 @@ class DashboardApp {
             input.click();
         });
     }
-    // Loop files, import each via ioManager
 
-    // Loop files, import each, tally results, report to console.
+    // Loop through files, import each via ioManager, report per-file progress via status indicator.
     async importFiles(files) {
+        this.status.show('Importing...');
         let successCount = 0;
         let failCount    = 0;
+
         for (let i = 0; i < files.length; i++) {
             const file = files[i];
+            // Per-file progress update
+            this.status.update(i + 1, files.length, `Importing ${file.name}...`);
             try {
                 const stats = await ioManager.import('csv', this.dataManager, file);
                 console.log(`Imported '${file.name}': ${stats.uniqueAdded} new tracks, ${stats.skipped} skipped`);
@@ -113,22 +124,22 @@ class DashboardApp {
             }
         }
 
-        // console.log(`Import complete: ${successCount} succeeded, ${failCount} failed.`);
-        // console.log(`  Total tracks processed: ${this.importer.totalTracksProcessed}`);
-        // console.log(`  Unique tracks added:    ${this.importer.uniqueTracksAdded}`);
-        // console.log(`  Invalid tracks skipped: ${this.importer.invalidTracksSkipped}`);
-        
         if (failCount > 0) {
-            console.error(`${failCount} file(s) failed. See console for details.`);
+            this.status.error(`${failCount} file(s) failed. See console for details.`);
         } else {
-            console.log(`Imported ${successCount} playlist(s) successfully.`);
+            this.status.complete(`Imported ${successCount} playlist(s) successfully.`);
         }
     }
 
-    // Register import and export adapters with ioManager, with string keys to identify format/profile.
+    // Register import and export adapters with ioManager, instantiate status indicator for I/O feedback
     setupIO() {
-        ioManager.registerImporter('csv', csvImportAdapter);
-        ioManager.registerExporter('csv', csvExportAdapter);
+        ioManager.registerImporter('csv',          csvImportAdapter);
+
+        ioManager.registerExporter('csv',          csvExportAdapter);
+        ioManager.registerExporter('jsonBundle',   jsonBundleExporter);
+        
+        this.status = new StatusIndicator(document.getElementById('io-footer'));
+
     }
 
 
@@ -150,14 +161,40 @@ class DashboardApp {
         // playlistSelectModal returns IDB IDs — map back to full objects
         const selected = allPlaylists.filter(pl => selectedIds.includes(pl.id));
 
+        this.status.show('Exporting...');
         for (let i = 0; i < selected.length; i++) {
             const playlist = selected[i];
+            this.status.update(i + 1, selected.length, `Exporting ${playlist.name}...`);
             const tracks = await Promise.all(
                 playlist.trackIDs.map(id => this.dataManager.getRecord('tracks', id))
             );
             const { filename, content } = await ioManager.export('csv', playlist, tracks, profileName);
             ioManager.triggerDownload(filename, content, 'text/csv');
         }
+        this.status.complete(`Exported ${selected.length} playlist(s).`);
+    }
+
+    // Present playlist selector, bundle all selected playlists into one JSON file, trigger download.
+    async runJsonExport() {
+        const allPlaylists = await this.dataManager.getAllRecords('playlists');
+        if (!allPlaylists || allPlaylists.length === 0) {
+            await notifyModal({ title: 'No Playlists', message: 'No playlists to export.' });
+            return;
+        }
+
+        const selectedIds = await playlistSelectModal({
+            title:        'Select Playlists to Export',
+            confirmLabel: 'Export Bundle',
+            playlists:    allPlaylists
+        });
+        if (!selectedIds || selectedIds.length === 0) return;
+
+        const selected = allPlaylists.filter(pl => selectedIds.includes(pl.id));
+
+        this.status.show('Building export bundle...');
+        const { filename, content } = await ioManager.export('jsonBundle', selected, this.dataManager);
+        ioManager.triggerDownload(filename, content, 'application/json');
+        this.status.complete('Bundle exported.');
     }
 
     // ====== LIBRARY CARD ==========================================
@@ -289,7 +326,7 @@ class DashboardApp {
             title:   "Clear All Storage",
             message: "This will permanently delete all playlists and tracks. This cannot be undone.",
             actions: [
-                { label: "Cancel",    value: false },
+                { label: "Cancel",    value: false, className: "modal__btn--cancel" },
                 { label: "Clear All", value: true,  className: "modal__btn--danger" }
             ]
         });

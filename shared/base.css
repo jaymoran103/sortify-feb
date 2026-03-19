@@ -2,7 +2,6 @@
 
 :root {
     /* Colors */
-    /* TODO update variable names: green->accent, red->danger, name-border -> border-name */
     --color-bg:                 #212121;
     --color-header-page:        #222;
     --color-header-table:       #222;
@@ -15,15 +14,27 @@
     --color-text-muted:         #888;
     --color-button-text:        #000;
     
-    --color-green:              rgb(56, 137, 65); /*FUTURE: Green->Accent?*/
-    --color-green-hover:        rgb(56, 214, 83); 
-    --color-button-primary:  #2be31a;
+    /* Color Definitions */
+    --color-green:              rgb(56, 137, 65);
+    --color-green-emphasis:        rgb(56, 214, 83); 
+    --color-red:                rgb(198, 49, 49);
+    --color-red-emphasis:          rgb(255, 113, 113);
+    --color-blue:               rgb(56, 120, 137); /* for testing color abstraction for now, honestly i like the look though */ 
+    --color-blue-emphasis:         rgb(56, 207, 214);
+
+    /* Actual semantic tokens to use in components */
+    --color-accent:             var(--color-green);
+    --color-accent-hover:       var(--color-green-emphasis);
+    --color-error:              var(--color-red);
+    --color-error-hover:        var(--color-red-emphasis);
+
+    --color-button-primary:        var(--color-accent);      /*no difference for now*/
+    --color-button-primary-hover:  var(--color-accent-hover);/*no difference for now*/
+
     --color-button-cancel:   #9e9da9;
     --color-button-cancel-hover:   rgb(130, 130, 130);
 
     --color-disabled:           rgb(120, 120, 120);
-    --color-red:                rgb(198, 49, 49); /* FUTURE: Red->danger/warning/error?*/
-    --color-red-hover:          rgb(255, 113, 113);
 
     /* Surface hierarchy */
     --color-surface:            #272727; /* card body background, one step above --color-bg */
@@ -71,7 +82,7 @@ button {
 /* ========== BUTTONS ========== */
 
 button {
-    background-color: var(--color-green);
+    background-color: var(--color-accent);
     color: var(--color-button-text);
     cursor: pointer;
     transition: background-color var(--transition-fast), font-weight var(--transition-fast);
@@ -85,7 +96,7 @@ button:disabled {
     cursor: default;
 }
 button:hover:not(:disabled) {
-    background-color: var(--color-green-hover);
+    background-color: var(--color-accent-hover);
     text-decoration: underline;
     font-weight: 500;
 }
@@ -170,7 +181,7 @@ button:hover:not(:disabled) {
 }
 .modal__btn--confirm,
 .modal__btn--primary {
-    background-color: var(--color-green);
+    background-color: var(--color-accent);
     color: var(--color-button-text);
     border: var(--standard-border);
 
@@ -178,7 +189,7 @@ button:hover:not(:disabled) {
 }
 .modal__btn--confirm:hover,
 .modal__btn--primary:hover {
-    background-color: var(--color-green-hover);
+    background-color: var(--color-accent-hover);
 }
 .modal__btn--confirm:disabled,
 .modal__btn--primary:disabled {
@@ -247,11 +258,11 @@ button.modal__btn--danger:hover {
     border-color: var(--color-text-muted);
 }
 .modal__list-row--checked {
-    border-color: var(--color-green);
+    border-color: var(--color-accent);
     background-color: rgba(65, 137, 56, 0.15);
 }
 .modal__list-row input[type="checkbox"] {
-    accent-color: var(--color-green);
+    accent-color: var(--color-accent);
     cursor: pointer;
     flex-shrink: 0;
 }
@@ -286,7 +297,7 @@ button.modal__btn--danger:hover {
     width: 100%;
     height: 50px;
     padding: 12px 14px;
-    background-color: var(--color-green);
+    background-color: var(--color-accent);
     color: var(--color-button-text);
     cursor: pointer;
     border: var(--standard-border);
@@ -297,18 +308,18 @@ button.modal__btn--danger:hover {
 }
 .modal__menu-btn:hover {
     /* color: var(--color-text);     */
-    /* background-color: var(--color-green-hover); */
+    /* background-color: var(--color-accent-hover); */
     text-decoration: none;/* no underline */
 }
 .modal__menu-btn--primary {
     /* color: var(--color-text);     */
-    background-color: var(--color-green); /* No difference for now */
+    background-color: var(--color-accent); /* No difference for now */
     /* border: var(--border-emphasized); */
 }
 /* override base button hover for primary menu rows */
 .modal__menu-btn--primary:hover {
     /* No difference for now */    
-    background-color: var(--color-green-hover);
+    background-color: var(--color-accent-hover);
 }
 
 .modal__menu-btn-text {

@@ -195,3 +195,50 @@ body {
 .btn-full {
     width: 100%;
 }
+
+/* ========== I/O STATUS INDICATOR ========== */
+
+.io-footer {
+    flex-direction: column;
+    gap: 5px;
+    padding: 10px 16px;
+}
+
+.io-status {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.io-status-bar-track {
+    width: 100%;
+    height: 4px;
+    background: var(--color-surface-hi);
+    border-radius: 9999px;
+    overflow: hidden;
+}
+
+.io-status-bar {
+    height: 100%;
+    width: 0%;
+    background: var(--color-accent);
+    border-radius: 9999px;
+    transition: width 0.2s ease;
+}
+
+.io-status--error .io-status-bar {
+    background: var(--color-error);
+}
+
+.io-status-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.io-status-label,
+.io-status-counter {
+    font-size: 0.78em;
+    color: var(--color-text-muted);
+}
