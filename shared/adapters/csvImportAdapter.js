@@ -1,14 +1,16 @@
-// CSV Import Adapter: header-aware counterpart to importer.js. Will supercede it
+// CSV Import Adapter: header-aware, alias-mapped CSV importer.
 
 // Supports any CSV whose headers can be mapped via FIELD_ALIASES.
-// Unrecognized columns are skipped safely with a warning
+
+//Unrecognized headers are logged, and currently skipped unless SKIP_UNRECOGNIZED_FIELDS is false.
+const SKIP_UNRECOGNIZED_FIELDS = true; // Easy toggle to allow all fields through without mapping.
 
 import { createPlaylist, createTrack } from "../models.js";
 
 // Maps External header name (lowercased) to internal field name.
 const FIELD_ALIASES = {
 
-    // Core fields
+    // CORE FIELDS - required for a valid track
     'trackid':            'trackID',        //App
     'track uri':          'trackID',        //Sample
     'uri':                'trackID',        //Spotify
@@ -24,7 +26,7 @@ const FIELD_ALIASES = {
     'artist name(s)':     'artist',         //Sample
     'artists':            'artist',         //Spotify
 
-    // Optional fields
+    // OPTIONAL FIELDS
     'release date':       'releaseDate',    //Sample
 
     'duration (ms)':      'duration',       //Sample
@@ -147,10 +149,16 @@ class CsvImportAdapter {
                     fieldIndex[internalName] = i;
                 }
             } else {
-                console.warn(`CSV import: unrecognized column '${headerRow[i]}' — skipping`);// Log per encounter/playlist, unrecognizedFields is more session oriented for a final report. 
+                // Track unrecognized fields for reporting, but allow through if SKIP_UNRECOGNIZED_FIELDS is false
                 if (!unrecognizedFields.has(raw)) {
-                    // console.warn(`CSV import: first occurrence of unrecognized column '${headerRow[i]}'`);
                     unrecognizedFields.add(raw);
+                }
+
+                if (SKIP_UNRECOGNIZED_FIELDS) {
+                    console.warn(`CSV import: unrecognized column '${headerRow[i]}' — skipping`);
+                } else {
+                    console.warn(`CSV import: unrecognized column '${headerRow[i]}' — including as-is`);
+                    fieldIndex[raw] = i; // Allow access to unrecognized fields by their raw header name
                 }
             }
         }

@@ -2,6 +2,7 @@ import DataManager from "./shared/dataManager.js";
 import ioManager from "./shared/ioManager.js";
 import importer from "./shared/adapters/csvImportAdapter.js";
 import csvImportAdapter  from "./shared/adapters/csvImportAdapter.js";
+import csvExportAdapter  from "./shared/adapters/csvExportAdapter.js";
 import { menuModal, notifyModal, warningModal, playlistSelectModal } from "./shared/modal.js";
 
 class DashboardApp {
@@ -47,9 +48,9 @@ class DashboardApp {
         // null = cancelled, do nothing
     }
 
-    // Show menu to choose export destination, then trigger appropriate flow; Neither is implemented yet.
+    // Show menu to choose export destination, then trigger appropriate flow;
     async handleExport() {
-        const choice = await menuModal({
+        const dest = await menuModal({
             title: "Export Playlists",
             choices: [
                 { label: "To Local Files", value: "local", primary: true },
@@ -57,10 +58,21 @@ class DashboardApp {
             ]
         });
 
-        if (choice === "local") {
-            await this.notAvailable("CSV export");
-        } else if (choice === "spotify") {
-            await this.notAvailable("Spotify export");
+        // Local download: show format options, then export as CSV using chosen profile, then trigger download via ioManager
+        if (dest === "local") {
+            const format = await menuModal({
+                title: "Export Format",
+                choices: [
+                    { label: "CSV — All Data",       value: "native",   primary: true },
+                    { label: "CSV — Minimal",               value: "minimal"   },
+                ]
+            });
+            await this.runCsvExport(format);
+        } 
+
+        // Spotify export: not implemented yet.
+        else if (dest === "spotify") {
+            await this.notAvailable();
         }
     }
 
@@ -89,8 +101,6 @@ class DashboardApp {
     async importFiles(files) {
         let successCount = 0;
         let failCount    = 0;
-        this.importer.resetStats();
-
         for (let i = 0; i < files.length; i++) {
             const file = files[i];
             try {
@@ -115,12 +125,39 @@ class DashboardApp {
         }
     }
 
-    // Register all adapters with ioManager and instantiate the status indicator.
+    // Register import and export adapters with ioManager, with string keys to identify format/profile.
     setupIO() {
-        this.status = new StatusIndicator(document.getElementById('io-footer'));
+        ioManager.registerImporter('csv', csvImportAdapter);
+        ioManager.registerExporter('csv', csvExportAdapter);
+    }
 
-        ioManager.registerImporter('csv',          importer);
-        ioManager.registerImporter('new',          csvImportAdapter);
+
+    // Present playlist selector, export each selected playlist as CSV, trigger download per file.
+    async runCsvExport(profileName) {
+        const allPlaylists = await this.dataManager.getAllRecords('playlists');
+        if (!allPlaylists || allPlaylists.length === 0) {
+            await notifyModal({ title: 'No Playlists', message: 'No playlists to export.' });
+            return;
+        }
+
+        const selectedIds = await playlistSelectModal({
+            title:        'Select Playlists to Export',
+            confirmLabel: 'Export',
+            playlists:    allPlaylists
+        });
+        if (!selectedIds || selectedIds.length === 0) return;
+
+        // playlistSelectModal returns IDB IDs — map back to full objects
+        const selected = allPlaylists.filter(pl => selectedIds.includes(pl.id));
+
+        for (let i = 0; i < selected.length; i++) {
+            const playlist = selected[i];
+            const tracks = await Promise.all(
+                playlist.trackIDs.map(id => this.dataManager.getRecord('tracks', id))
+            );
+            const { filename, content } = await ioManager.export('csv', playlist, tracks, profileName);
+            ioManager.triggerDownload(filename, content, 'text/csv');
+        }
     }
 
     // ====== LIBRARY CARD ==========================================

@@ -1,9 +1,11 @@
+//DEPRECATED - this class has been replaced by csvImportAdapter and ioManager adapter pattern. Keeping for now for posterity
 import { createPlaylist, createTrack } from "./models.js";
 
 class Importer {
 
     constructor() {
         this.resetStats();
+        console.error("constructing deprecated Importer class. ");
     }
 
     //Track stats about the import process, just for console printing for now
@@ -13,7 +15,7 @@ class Importer {
         this.invalidTracksSkipped = 0;
     }
 
-    // Wrapper for use with ioManager
+    // Wrapper for use with ioManager - DEPRECATED, use csvImportAdapter instead
     async import(dataManager,files){
         for (const file of files) {
             await this.importPlaylistCSV(dataManager,file);
