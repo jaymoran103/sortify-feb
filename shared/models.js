@@ -13,13 +13,50 @@ export function createPlaylist(name, trackIDs){
     }
 }
 
-//Create track based on provided fields.
-export function createTrack(trackID, title, album, artist){
+//  Core Fields:
+//   trackID        (unique identifier)
+//   title
+//   album
+//   artist         (string, optionally comma-separated)
+//   source         ('generated','csv','spotify',or 'unknown')
+
+// Anticipated optional fields:
+// Numbers:
+//   tempo          (bpm)
+//   duration       (ms)
+//   key            (0–11, where 0 = C, 2 = D, etc.)
+//   loudness       (dB)
+//   timeSignature  (beats per bar?)
+//   popularity     (0–100)
+//   mode           (0 = minor, 1 = major)
+
+// Doubles (0.0–1.0):
+//   energy
+//   danceability
+//   valence
+//   liveness
+//   acousticness
+//   speechiness
+//   instrumentalness
+
+// Strings:
+//   explicit       (boolean)
+//   addedAt        (ISO datetime string)
+//   releaseDate    (ISO date or year only)
+//   genre          (comma-separated string, e.g. "rock, blues")
+//   recordLabel
+
+
+//Create track based on provided fields. source indicates data origin ('generated','csv','spotify', 'unknown')
+//optionalFields spreads any additional metadata onto the returned object.
+export function createTrack(trackID, title, album, artist, source = 'unknown', optionalFields = {}){
     return {
-        type: "track",
+        type:    "track",
         trackID: trackID || "track"+ Date.now(),
-        title: title || "Untitled Track "+ Date.now(),
-        album: album || "Unknown Album "+ Date.now(),
-        artist: artist || "Unknown Artist "+ Date.now()
+        title:   title   || "Untitled Track "+ Date.now(),
+        album:   album   || "Unknown Album "+ Date.now(),
+        artist:  artist  || "Unknown Artist "+ Date.now(),
+        source:  source,
+        ...optionalFields
     }
 }

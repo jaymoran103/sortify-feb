@@ -13,6 +13,13 @@ class Importer {
         this.invalidTracksSkipped = 0;
     }
 
+    // Wrapper for use with ioManager
+    async import(dataManager,files){
+        for (const file of files) {
+            await this.importPlaylistCSV(dataManager,file);
+        }
+    }
+
     //import playlist from CSV file, creating track records as needed and linking to new playlist record.
     async importPlaylistCSV(dataManager,file) {
 

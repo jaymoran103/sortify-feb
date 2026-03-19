@@ -114,7 +114,7 @@ class SampleTracks{
 
     getWorkspaceData() {
         return {
-            tracks: this.tracks.map(track => createTrack(track.trackID, track.title, track.album, track.artist)),//TODO switch to doing this in this.tracks by default, if theres even further use for this once real data is integrated
+            tracks: this.tracks.map(track => createTrack(track.trackID, track.title, track.album, track.artist, 'generated')),
             playlists: [
                 createPlaylist("All Blues", ["track1", "track2", "track3", "track4","track5","track6","track7"]),
                 createPlaylist("Old Blues", ["track1", "track3", "track5", "track4"]),

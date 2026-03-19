@@ -1,19 +1,19 @@
-//Commit message: 
-
 import DataManager from "./shared/dataManager.js";
-import Importer from "./shared/importer.js";
+import ioManager from "./shared/ioManager.js";
+import importer from "./shared/adapters/csvImportAdapter.js";
+import csvImportAdapter  from "./shared/adapters/csvImportAdapter.js";
 import { menuModal, notifyModal, warningModal, playlistSelectModal } from "./shared/modal.js";
 
 class DashboardApp {
 
     constructor() {
         this.dataManager = new DataManager();
-        this.importer    = new Importer();
 
         this.dataManager.init().then(() => {
             console.log("Database initialized");
             this.addEventListeners();
             this.renderLibrary();
+            this.setupIO();
         }).catch((err) => {
             console.error("Failed to initialize database:", err);
         });
@@ -83,6 +83,7 @@ class DashboardApp {
             input.click();
         });
     }
+    // Loop files, import each via ioManager
 
     // Loop files, import each, tally results, report to console.
     async importFiles(files) {
@@ -93,8 +94,8 @@ class DashboardApp {
         for (let i = 0; i < files.length; i++) {
             const file = files[i];
             try {
-                console.log(`Importing file ${i + 1} of ${files.length}: '${file.name}'`);
-                await this.importer.importPlaylistCSV(this.dataManager, file);
+                const stats = await ioManager.import('csv', this.dataManager, file);
+                console.log(`Imported '${file.name}': ${stats.uniqueAdded} new tracks, ${stats.skipped} skipped`);
                 successCount++;
             } catch (err) {
                 console.error(`Failed to import '${file.name}':`, err);
@@ -102,10 +103,24 @@ class DashboardApp {
             }
         }
 
-        console.log(`Import complete: ${successCount} succeeded, ${failCount} failed.`);
-        console.log(`  Total tracks processed: ${this.importer.totalTracksProcessed}`);
-        console.log(`  Unique tracks added:    ${this.importer.uniqueTracksAdded}`);
-        console.log(`  Invalid tracks skipped: ${this.importer.invalidTracksSkipped}`);
+        // console.log(`Import complete: ${successCount} succeeded, ${failCount} failed.`);
+        // console.log(`  Total tracks processed: ${this.importer.totalTracksProcessed}`);
+        // console.log(`  Unique tracks added:    ${this.importer.uniqueTracksAdded}`);
+        // console.log(`  Invalid tracks skipped: ${this.importer.invalidTracksSkipped}`);
+        
+        if (failCount > 0) {
+            console.error(`${failCount} file(s) failed. See console for details.`);
+        } else {
+            console.log(`Imported ${successCount} playlist(s) successfully.`);
+        }
+    }
+
+    // Register all adapters with ioManager and instantiate the status indicator.
+    setupIO() {
+        this.status = new StatusIndicator(document.getElementById('io-footer'));
+
+        ioManager.registerImporter('csv',          importer);
+        ioManager.registerImporter('new',          csvImportAdapter);
     }
 
     // ====== LIBRARY CARD ==========================================
