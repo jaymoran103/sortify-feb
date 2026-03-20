@@ -6,8 +6,7 @@ const BASE_URL     = 'https://api.spotify.com/v1';
 const output = document.getElementById('output');
 
 
-
-//Main entry point
+// Main entry point
 function init() {
     const params = new URLSearchParams(window.location.search);
     if (params.has('code')) {
@@ -20,6 +19,9 @@ function init() {
         });
     }
 }
+
+
+// LOGGING
 
 function log(msg) {
     console.log(msg);
@@ -34,7 +36,10 @@ function logError(msg) {
     output.appendChild(span);
 }
 
-// PCKE HELPERS
+
+// PKCE HELPERS
+
+// Convert ArrayBuffer to URL-safe base64 string
 function base64url(buffer) {
     const bytes = buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer);
     let str = '';
@@ -42,11 +47,13 @@ function base64url(buffer) {
     return btoa(str).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
 }
 
+// Generate a random PKCE verifier string
 function generateVerifier() {
     const bytes = crypto.getRandomValues(new Uint8Array(72));
     return base64url(bytes);
 }
 
+// Generate a PKCE challenge from the verifier using SHA-256
 async function generateChallenge(verifier) {
     const encoded = new TextEncoder().encode(verifier);
     const hash    = await crypto.subtle.digest('SHA-256', encoded);
@@ -56,7 +63,7 @@ async function generateChallenge(verifier) {
 
 // AUTH FLOW
 
-// Main auth method: Generate PKCE params, store in sessionStorage, and redirect to Spotify auth page
+// Generate PKCE params, store in sessionStorage, redirect to Spotify auth page
 async function handleConnect() {
     const verifier  = generateVerifier();
     const challenge = await generateChallenge(verifier);
@@ -78,7 +85,7 @@ async function handleConnect() {
     window.location.href = 'https://accounts.spotify.com/authorize?' + params.toString();
 }
 
-//Validate state, exchange code for token, store token, and fetch playlists
+// Exchange auth code for token, store it, clean URL, then run the demo
 async function handleCallback() {
 
     //Get code + state from URL, and PKCE params from sessionStorage
@@ -109,7 +116,6 @@ async function handleCallback() {
     }
     log('Exchanging code for token...');
 
-
     // Build body for token request
     const body = new URLSearchParams({
         grant_type:    'authorization_code',
@@ -118,29 +124,19 @@ async function handleCallback() {
         client_id:     CLIENT_ID,
         code_verifier: verifier,
     });
-    // console.log('Token request body:', body.toString());//DEBUG
 
-    // Exchange code for token
     const response = await fetch('https://accounts.spotify.com/api/token', {
         method:  'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body:    body.toString(),
     });
-    // const response = await fetch('https://spotify.com/api/token', {
-    //     method:  'POST',
-    //     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    //     body:    body.toString(),
-    //     mode:    'cors'
-    // });
 
-    // console.log('Token response:', response);//DEBUG
     if (!response.ok) {
         const err = await response.json().catch(() => ({}));
         logError(`ERROR: Token exchange failed (${response.status}): ${err.error_description || err.error || 'Unknown'}`);
         return;
     }
 
-    // Store token, clean up url + sessionStorage, 
     const data = await response.json();
     sessionStorage.setItem('access_token', data.access_token);
     sessionStorage.removeItem('pkce_verifier');
@@ -149,28 +145,112 @@ async function handleCallback() {
     history.replaceState({}, '', window.location.pathname);
 
     //Log success and fetch playlists
-    log('Token obtained. Fetching playlists...\n');
-    await fetchPlaylists(data.access_token);
+    log('Token obtained.\n');
+    await runDemo(data.access_token);
 }
 
-// given a valid token, fetches and logs playlists
-async function fetchPlaylists(token) {
-    //FUTURE: Use a loop with offset to fetch all playlists. 
-    const response = await fetch(BASE_URL + '/me/playlists?limit=50', {
-        headers: { 'Authorization': 'Bearer ' + token },
-    });
 
-    // console.log("Playlists response:", response);//DEBUG
+// API HELPERS
+
+function sleep(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+// Fetch wrapper: adds auth header, handles one 429 retry using Retry-After value
+async function apiFetch(endpoint, token) {
+    const url     = BASE_URL + endpoint;
+    const headers = { 'Authorization': 'Bearer ' + token };
+    let response  = await fetch(url, { headers });
+
+    // Rate limited: wait the requested delay and retry once
+    if (response.status === 429) {
+        const retryAfter = Number(response.headers.get('Retry-After') || 1);
+        await sleep((retryAfter + 1) * 1000);
+        response = await fetch(url, { headers });
+    }
+
     if (!response.ok) {
-        logError(`ERROR: /me/playlists returned ${response.status}`);
+        const body = await response.json().catch(() => ({}));
+        throw new Error(`Spotify API ${response.status} on ${endpoint}${body.error?.message ? ': ' + body.error.message : ''}`);
+    }
+
+    return response.json();
+}
+
+
+// PLAYLIST FETCHING
+
+// Fetch all playlists for the authenticated user, paginating until none remain
+// Returns [{ id, name, itemCount }]
+async function getAllPlaylists(token) {
+    const all  = [];
+    let offset = 0;
+
+    while (true) {
+        const data = await apiFetch(`/me/playlists?limit=50&offset=${offset}`, token);
+
+        for (const item of data.items) {
+            // API may return count under either key depending on playlist type
+            const itemCount = item.items?.total ?? item.tracks?.total ?? 0;
+            all.push({ id: item.id, name: item.name, itemCount });
+        }
+
+        if (!data.next) break;
+        offset += 50;
+    }
+
+    log(`Fetched ${all.length} playlists total.\n`);
+    return all;
+}
+
+// Fetch all tracks for a single playlist, paginating until none remain
+// Uses /items endpoint (not deprecated /tracks). Track data lives at item.item.
+// Returns array of raw Spotify track objects
+async function getPlaylistItems(token, playlistId) {
+    const all  = [];
+    let offset = 0;
+
+    while (true) {
+        const data = await apiFetch(`/playlists/${playlistId}/items?limit=50&offset=${offset}`, token);
+
+        for (const item of data.items) {
+            // item.item is null for local files, deleted tracks, podcast episodes — skip those
+            if (!item.item || !item.item.uri) continue;
+            all.push(item.item);
+        }
+
+        if (!data.next) break;
+        offset += 50;
+    }
+
+    log(`Fetched ${all.length} tracks.\n`);
+    return all;
+}
+
+
+// DEMO
+
+// Run after auth completes: print all playlists, then fetch + print tracks for the first one
+async function runDemo(token) {
+    log('--- All playlists ---');
+    const playlists = await getAllPlaylists(token);
+
+    for (const pl of playlists) {
+        output.textContent += `${pl.name}  (${pl.itemCount} tracks)\n`;
+    }
+
+    if (playlists.length === 0) {
+        log('No playlists found.');
         return;
     }
 
-    const data = await response.json();
-    log(`Found ${data.total} total playlists (showing up to 50):\n`);
-    for (const item of data.items) {
-        console.log(item.name);//DEBUG
-        output.textContent += item.name + '\n';
+    const first = playlists[0];
+    log(`\n--- Tracks in: ${first.name} ---`);
+    const items = await getPlaylistItems(token, first.id);
+
+    for (const track of items) {
+        const artists = track.artists.map(a => a.name).join(', ');
+        output.textContent += `${track.name}  —  ${artists}\n`;
     }
 }
 
