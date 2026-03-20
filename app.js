@@ -7,14 +7,19 @@ import jsonImportAdapter from "./shared/adapters/jsonImportAdapter.js";
 import jsonExportAdapter from "./shared/adapters/jsonExportAdapter.js";
 
 
-import { menuModal, notifyModal, warningModal, playlistSelectModal } from "./shared/modal.js";
+import spotifyAuthManager from "./shared/spotifyAuthManager.js";
+import spotifyImportAdapter from "./shared/adapters/spotifyImportAdapter.js";
+
+import { menuModal, notifyModal, warningModal, playlistSelectModal, spotifyPlaylistSelectModal } from "./shared/modal.js";
 
 class DashboardApp {
 
     constructor() {
         this.dataManager = new DataManager();
 
-        this.dataManager.init().then(() => {
+        this.dataManager.init().then(async () => {
+            // Check if we're returning from Spotify auth redirect, handling token exchenge and storage if so.
+            await this.handleAuthCallbackIfNeeded();
             console.log("Database initialized");
             this.addEventListeners();
             this.renderLibrary();
@@ -22,6 +27,23 @@ class DashboardApp {
         }).catch((err) => {
             console.error("Failed to initialize database:", err);
         });
+    }
+
+    // Complete Spotify auth callback if returning from OAuth redirect
+    async handleAuthCallbackIfNeeded() {
+        const hasCode = new URLSearchParams(window.location.search).has('code');
+        // console.log(`Handling Spotify auth callback: ${hasCode}`);
+        if (hasCode) {
+            try {
+                console.log('Processing Spotify auth callback...');
+                await spotifyAuthManager.handleAuthCallback();
+                console.log('Spotify auth successful, access token stored.');
+            } catch (err) {
+                console.error('Spotify auth callback failed:', err);
+                await notifyModal({ title: 'Spotify Auth Failed', message: err.message });
+            }
+        }
+        //TODO store attempted action before redirecting to auth flow, and trigger it here if present?
     }
 
     addEventListeners() {
@@ -47,7 +69,7 @@ class DashboardApp {
         if (choice === "local") {
             await this.runLocalImport();
         } else if (choice === "spotify") {
-            await this.notAvailable();
+            await this.runSpotifyImport();
         }
         // null = cancelled, do nothing
     }
@@ -147,14 +169,53 @@ class DashboardApp {
     setupIO() {
         ioManager.registerImporter('csv',          csvImportAdapter);
         ioManager.registerImporter('json',         jsonImportAdapter);
+        ioManager.registerImporter('spotifyImport', spotifyImportAdapter);
 
         ioManager.registerExporter('csv',          csvExportAdapter);
         ioManager.registerExporter('jsonBundle',   jsonExportAdapter);//leaving as bundle for now
-        
+
         this.status = new StatusIndicator(document.getElementById('io-footer'));
-
     }
+    // Fetch user's Spotify playlists, show selection modal, import tracks for chosen playlists.
+    async runSpotifyImport() {
+        try {
+            const token = await spotifyAuthManager.getAccessToken();
+            // getAccessToken() may redirect — if so, app restarts and handleAuthCallback() runs on return
+            if (!token) return;
 
+            // Attempt to fetch user's Spotify playlists. 
+            const playlists = await spotifyImportAdapter.fetchUserPlaylists(token);
+            if (!playlists || playlists.length === 0) {
+                await notifyModal({ title: 'No Playlists Found', message: 'No playlists found in your Spotify account.' });
+                return;
+            }
+
+            // Show Spotify playlist selector — returns array of spotifyPlaylistId strings
+            const selectedIds = await spotifyPlaylistSelectModal({
+                title:        'Select Playlists to Import',
+                confirmLabel: 'Import',
+                playlists,
+            });
+            if (!selectedIds || selectedIds.length === 0) return;
+
+            // Map selected IDs back to full objects so importSelected has names for playlist records
+            const selectedPlaylists = playlists.filter(pl => selectedIds.includes(pl.spotifyPlaylistId));
+
+            this.status.show('Importing from Spotify...');
+            const stats = await spotifyImportAdapter.importSelected(
+                this.dataManager, token, selectedPlaylists,
+                (done, total, name) => this.status.update(done, total, `Importing "${name}"...`)
+            );
+
+            this.status.complete(`Done. ${stats.uniqueAdded} new track(s) added.`);
+            this.renderLibrary();
+
+        } catch (err) {
+            this.status.hide();
+            console.error('Spotify import failed:', err);
+            await notifyModal({ title: 'Spotify Import Failed', message: err.message });
+        }
+    }
 
     // Present playlist selector, export each selected playlist as CSV, trigger download per file.
     async runCsvExport(profileName) {

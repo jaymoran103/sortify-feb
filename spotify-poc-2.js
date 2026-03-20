@@ -245,10 +245,20 @@ async function runDemo(token) {
     }
 
     const first = playlists[0];
-    log(`\n--- Tracks in: ${first.name} ---`);
-    const items = await getPlaylistItems(token, first.id);
 
-    for (const track of items) {
+    const last = playlists[playlists.length - 1];
+    log(`\n--- Tracks in: ${first.name} ---`);
+    const firstPlaylistItems = await getPlaylistItems(token, first.id);
+
+    for (const track of firstPlaylistItems) {
+        const artists = track.artists.map(a => a.name).join(', ');
+        output.textContent += `${track.name}  —  ${artists}\n`;
+    }
+
+    const lastPlaylistItems = await getPlaylistItems(token, last.id);
+    log(`\n--- Tracks in: ${last.name} ---`);
+
+    for (const track of lastPlaylistItems) {
         const artists = track.artists.map(a => a.name).join(', ');
         output.textContent += `${track.name}  —  ${artists}\n`;
     }

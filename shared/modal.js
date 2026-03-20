@@ -1,5 +1,3 @@
-//commmit message: 
-// 
 // Lightweight modal controller. One modal open at a time.
 // DOM shell is built once on import and persists in the body; visibility toggled via modal-overlay--visible.
 
@@ -329,6 +327,110 @@ export function playlistSelectModal({ title = "Select Playlists", confirmLabel =
     });
 }
 
+// Variant of playlistSelectModal for Spotify playlists.
+// Same method signature and return type, but expects playlist objects with { spotifyPlaylistId, name, trackCount } and uses spotifyPlaylistId for the selected IDs.
+// FUTURE: extract shared logic to a base selection modal or helper methods, fine for now
+// playlists: [{ spotifyPlaylistId, name, trackCount }]  — trackCount is a raw number, not derived from trackIDs
+// Returns an array of selected spotifyPlaylistId strings, or null if cancelled/dismissed.
+export function spotifyPlaylistSelectModal({ title = "Select Playlists", confirmLabel = "Import", cancelLabel = "Cancel", playlists = [] } = {}) {
+    let selectedIds = new Set();
+    let noteEl;
+
+    // Update selected set, row highlight, and confirm button state on checkbox toggle
+    function updateState() {
+        const count = selectedIds.size;
+        noteEl.textContent          = count > 0 ? `${count} selected` : "";
+        _modal._confirmBtn.disabled = count === 0;
+    }
+
+    // Build a single playlist row with checkbox, name, and track count
+    function buildPlaylistRow(pl, list) {
+        const label     = document.createElement("label");
+        label.className = "modal__list-row";
+
+        const checkbox = document.createElement("input");
+        checkbox.type  = "checkbox";
+
+        checkbox.addEventListener("change", () => {
+            if (checkbox.checked) {
+                selectedIds.add(pl.spotifyPlaylistId);
+                label.classList.add("modal__list-row--checked");
+            } else {
+                selectedIds.delete(pl.spotifyPlaylistId);
+                label.classList.remove("modal__list-row--checked");
+            }
+            updateState();
+        });
+
+        const nameSpan       = document.createElement("span");
+        nameSpan.className   = "modal__list-row-name";
+        nameSpan.textContent = pl.name;
+
+        const countSpan       = document.createElement("span");
+        countSpan.className   = "modal__list-row-count";
+        countSpan.textContent = `${pl.trackCount} track${pl.trackCount !== 1 ? "s" : ""}`;
+
+        label.appendChild(checkbox);
+        label.appendChild(nameSpan);
+        label.appendChild(countSpan);
+        list.appendChild(label);
+
+        return { label, name: pl.name.toLowerCase() };
+    }
+
+    return _modal.open({
+        title,
+        confirmLabel,
+        cancelLabel,
+        showCancel: true,
+        body(container) {
+            _modal._overlay.firstElementChild.classList.add("modal--list");
+
+            const searchInput       = document.createElement("input");
+            searchInput.type        = "text";
+            searchInput.className   = "modal__search-input";
+            searchInput.placeholder = "Search playlists\u2026";
+
+            const list     = document.createElement("div");
+            list.className = "modal__list";
+
+            const emptyMsg       = document.createElement("p");
+            emptyMsg.className   = "modal__list-empty";
+            emptyMsg.textContent = "No playlists match your search.";
+            emptyMsg.hidden      = true;
+
+            const rows = playlists.map(pl => buildPlaylistRow(pl, list));
+            list.appendChild(emptyMsg);
+
+            searchInput.addEventListener("input", () => {
+                const query = searchInput.value.trim().toLowerCase();
+                let visibleCount = 0;
+                for (const { label, name } of rows) {
+                    const match = !query || name.includes(query);
+                    label.hidden = !match;
+                    if (match) visibleCount++;
+                }
+                emptyMsg.hidden = visibleCount > 0;
+            });
+
+            container.appendChild(searchInput);
+            container.appendChild(list);
+
+            const old = _modal._footerEl.querySelector(".modal__footer-note");
+            if (old) old.remove();
+            noteEl           = document.createElement("span");
+            noteEl.className = "modal__footer-note";
+            _modal._footerEl.prepend(noteEl);
+
+            _modal._confirmBtn.disabled = true;
+        },
+        onConfirm() {
+            if (selectedIds.size === 0) return;
+            _modal.close([...selectedIds]);
+        }
+    });
+}
+
 
 // Open a menu-choice modal: a list of clickable action rows, each closing the modal with its value.
 // Currently uses buttons as rows, with wrapper inside for potential additional content.
@@ -384,3 +486,4 @@ export function menuModal({ title, choices = [], cancelLabel = "Cancel", hint } 
         }
     });
 }
+
