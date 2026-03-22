@@ -1,3 +1,5 @@
+// Improved upon in app implementation, leaving here for now for reference/posterity
+
 const CLIENT_ID    = '95ba1274418d436a8540ebee2d22c8ed';
 const REDIRECT_URI = window.location.origin + '/spotify-poc.html';
 const SCOPES       = 'playlist-read-private playlist-read-collaborative';

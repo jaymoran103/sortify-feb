@@ -1,4 +1,13 @@
-#-TASKS
+#TASKS
+
+# TODO:
+- Fix "Fetching" string bug for onprogress display
+- Make progress display flash when a process starts, so user doesnt miss visual update after click spotify option in modals
+- Limit onprogress height to one line, shorten string as needed. 
+    - Split parts of message to separate containers?
+    - Make onProgress bar measure progress through total tracks, not total playlists. Updating on every 50 instead of on playlist completion will look smoother and more meaningful.
+
+
 
 # WORKSPACE
 - Restyle workspace.css to look more modern
@@ -6,18 +15,20 @@
 
 # DASHBOARD
 - Make dashboard iteration 3.
-    -- Widgets: I/O, Library, Workspace. Similarity stub with basic overlap checks?
-    -- Modals: Import Playlists, Export Playlists, Select Workspace Playlists, Help
-    -- Update README to reflect dashboard and general app overview
+    [x] Widgets: I/O, Library, Workspace.
+    [ ] Extra Widget: Similarity Stub: Check against reference set and jaccard overlap
+    [x] Modals: Import Playlists, Export Playlists, Select Workspace Playlists, Help
+    -- Add README with general app overview
 
-- Try linking spotify API, manage rate limit with query queue in dashboard I/O widget
+[x] Link spotify API, manager for I/O and rate limit in adapters  limit with query queue in dashboard I/O widget
 
 
 # LATER
 
+- General manager for spotify API use, centralizing calls into one queue to ensure concurrent processes don't trip a rate limit. Existing authManager logic is incorporated or called as a utility.
 - Dashboard: Workspace widget tracks recent launches, quick way to reselect same files.
 - Workspace: Extract handlers and/or DOM builders to separate file?
-- Data Layer: Support more imported track fields?
+[x] Data Layer: Support more imported track fields?
 - Stub for similarity module with just name/duration comparison? Honestly BPM could win the day
 - Basic module for libary management? Could just offer a better view (simple collapsing views with robust sort/search went a long way) and option to open selections in workspace.
 

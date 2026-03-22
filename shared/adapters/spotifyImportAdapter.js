@@ -13,17 +13,28 @@ function _sleep(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-// Fetch wrapper: adds auth header, handles one 429 retry using Retry-After value
-async function _apiFetch(endpoint, token) {
+
+
+// Fetch wrapper: adds auth header, retries on 429 up to 3 times using Retry-After value.
+// Retry-After is not always exposed over CORS, so we fall back to 30s per attempt —
+// long enough to clear Spotify's typical rate-limit window.
+// onRateLimit(seconds) is called before each wait so callers can surface it in the UI.
+// FUTURE: Refactor to use a shared API helper module. (At least 429 handling)
+async function _apiFetch(endpoint, token, onRateLimit) {
     const url     = BASE_URL + endpoint;
     const headers = { 'Authorization': 'Bearer ' + token };
-    let response  = await fetch(url, { headers });
 
-    // Rate limited: wait the requested delay then retry once
-    if (response.status === 429) {
-        const retryAfter = Number(response.headers.get('Retry-After') || 1);
-        await _sleep((retryAfter + 1) * 1000);
+    // Attempt to get response, returning unless a 429 error is encountered - in which case it waits 
+    let response;
+    for (let attempt = 0; attempt < 3; attempt++) {
         response = await fetch(url, { headers });
+        if (response.status !== 429) break;
+
+        // Use Retry-After header if available; fall back to 30s (Spotify's typical window)
+        const retryAfter = Number(response.headers.get('Retry-After') || 0); // report result as 0 if not reeived
+        const waitMs     = retryAfter > 0 ? (retryAfter + 1) * 1000 : 30000; // add 1s to buffer, or use 30s if no retryAfter provided
+        if (onRateLimit) onRateLimit(Math.round(waitMs / 1000)); // report wait time to caller so it can update the UI
+        await _sleep(waitMs);
     }
 
     if (!response.ok) {
@@ -40,14 +51,17 @@ async function _apiFetch(endpoint, token) {
 class SpotifyImportAdapter {
 
     // Fetch all playlists for the authenticated user, paginating until none remain.
+    // onProgress(collected, total) called after each page.
+    // onRateLimit(seconds) called before each 429 wait so the caller can update the UI.
     // Returns [{ spotifyPlaylistId, name, trackCount }]
-    async fetchUserPlaylists(token) {
+    async fetchUserPlaylists(token, onProgress, onRateLimit) {
         const all  = [];
         let offset = 0;
+        let total  = null;
 
         while (true) {
-            const data = await _apiFetch(`/me/playlists?limit=50&offset=${offset}`, token);
-            console.log(`Fetching playlists from user library: collected ${all.length} of ${data.total}`);
+            const data = await _apiFetch(`/me/playlists?limit=50&offset=${offset}`, token, onRateLimit);
+            if (total === null) total = data.total;
 
             for (const item of data.items) {
                 // API may return track count under either key depending on playlist type
@@ -59,6 +73,7 @@ class SpotifyImportAdapter {
                 all.push({ spotifyPlaylistId: item.id, name: item.name, trackCount: trackInfo.total });
             }
 
+            if (onProgress) onProgress(all.length, total);
             if (!data.next) break;
             offset += 50;
         }
@@ -68,7 +83,9 @@ class SpotifyImportAdapter {
 
     // Fetch all tracks for a single playlist, paginating until none remain.
     // Skips null entries (local files, deleted tracks, podcast episodes).
-    // Calls onProgress(collected, total) after each page (if provided.) //TODO for large imports, have fetchUserPlaylists do this instead.
+    // onProgress(collected, total) is called after each page if provided.
+    // FUTURE: For very large libraries, surface per-playlist progress in the selection modal
+    //         itself (spinner/count while playlists load) rather than the status bar.
     // Returns array of raw Spotify track objects.
     async fetchPlaylistItems(token, spotifyPlaylistId, onProgress) {
         const all  = [];
@@ -77,7 +94,6 @@ class SpotifyImportAdapter {
 
         while (true) {
             const data = await _apiFetch(`/playlists/${spotifyPlaylistId}/items?limit=50&offset=${offset}`, token);
-            console.log(`Fetching tracks for playlist ${spotifyPlaylistId}: collected ${all.length} of ${data.total}`);
             if (total === null) total = data.total;
 
             for (const item of data.items) {
@@ -113,6 +129,9 @@ class SpotifyImportAdapter {
     // Import a set of selected Spotify playlists into IDB.
     // selectedPlaylists: [{ spotifyPlaylistId, name }]
     // Skips 403/restricted playlists with a warning rather than failing the whole import.
+    // onProgress(playlistsDone, playlistsTotal, label) uses playlist-level units throughout —
+    // the bar always reflects position in the overall job, not progress within a single playlist.
+    // Track-level detail is embedded in the label string during fetching.
     // Returns { totalProcessed, uniqueAdded, skipped }
     async importSelected(dataManager, token, selectedPlaylists, onProgress) {
         let totalProcessed = 0;
@@ -120,7 +139,6 @@ class SpotifyImportAdapter {
         let skipped        = 0;
 
         for (let i = 0; i < selectedPlaylists.length; i++) {
-            console.log(`Importing playlist ${i + 1} of ${selectedPlaylists.length}...`);
             const { spotifyPlaylistId, name } = selectedPlaylists[i];
 
             // Fetch tracks — on 403 (restricted/Spotify-owned playlist) skip and continue
@@ -128,7 +146,8 @@ class SpotifyImportAdapter {
             try {
                 rawTracks = await this.fetchPlaylistItems(
                     token, spotifyPlaylistId,
-                    (done, total) => onProgress && onProgress(done, total, `Fetching "${name}"...`)
+                    // Bar stays at playlist i throughout fetching; track detail goes in the label
+                    (done, total) => onProgress && onProgress(i, selectedPlaylists.length, `Fetching "${name}" (${done}/${total} tracks)...`)
                 );
             } catch (err) {
                 console.warn(`[Spotify] Skipping "${name}" (${spotifyPlaylistId}): ${err.message}`);
@@ -160,13 +179,12 @@ class SpotifyImportAdapter {
                 }
             }
 
-            // Create the playlist record in IDB with all collected track IDs
+            // Advance bar to next playlist position once all its tracks are stored
             await dataManager.createRecord('playlists', createPlaylist(name, trackIDs));
             if (onProgress) onProgress(i + 1, selectedPlaylists.length, name);
 
             // Brief pause between playlists to stay under Spotify rate limits
-            if (i < selectedPlaylists.length - 1) await _sleep(150);
-            // if (i < selectedPlaylists.length - 1) await _sleep(1000);
+            if (i < selectedPlaylists.length - 1) await _sleep(spotifyAuthManager.SLEEP_BETWEEN_PLAYLISTS_MS);
         }
 
         return { totalProcessed, uniqueAdded, skipped };

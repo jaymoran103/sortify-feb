@@ -2,6 +2,8 @@
 // Importable by any adapter that needs a Spotify access token.
 
 
+const SLEEP_BETWEEN_PLAYLISTS_MS = 1000;//TODO move this and auth constants to a config file for static site, and backend after Vue refactor
+
 // AUTH CONSTANTS
 
 const CLIENT_ID    = '95ba1274418d436a8540ebee2d22c8ed';// FUTURE: Move to env var once before deployment.

@@ -9,6 +9,7 @@ import jsonExportAdapter from "./shared/adapters/jsonExportAdapter.js";
 
 import spotifyAuthManager from "./shared/spotifyAuthManager.js";
 import spotifyImportAdapter from "./shared/adapters/spotifyImportAdapter.js";
+import spotifyExportAdapter from "./shared/adapters/spotifyExportAdapter.js";
 
 import { menuModal, notifyModal, warningModal, playlistSelectModal, spotifyPlaylistSelectModal } from "./shared/modal.js";
 
@@ -102,9 +103,9 @@ class DashboardApp {
                 await this.runCsvExport(format);
             }
         }
-        // Spotify export: not implemented yet.
+        // Spotify export: select playlists, push to Spotify, show result URLs.
         else if (dest === "spotify") {
-            await this.notAvailable();
+            await this.runSpotifyExport();
         }
     }
 
@@ -173,6 +174,7 @@ class DashboardApp {
 
         ioManager.registerExporter('csv',          csvExportAdapter);
         ioManager.registerExporter('jsonBundle',   jsonExportAdapter);//leaving as bundle for now
+        ioManager.registerExporter('spotifyExport', spotifyExportAdapter);
 
         this.status = new StatusIndicator(document.getElementById('io-footer'));
     }
@@ -183,8 +185,17 @@ class DashboardApp {
             // getAccessToken() may redirect — if so, app restarts and handleAuthCallback() runs on return
             if (!token) return;
 
-            // Attempt to fetch user's Spotify playlists. 
-            const playlists = await spotifyImportAdapter.fetchUserPlaylists(token);
+            // Fetch user's playlists with progress on the status bar.
+            // FUTURE: open/update modal for loading state (spinning wheel or 'loading...' text) to indicate something is still happening. 
+            //       if timing for access is predictable we could do a load indicator a default estimate, updated as info comes
+            this.status.show('Loading your Spotify playlists...');
+            const playlists = await spotifyImportAdapter.fetchUserPlaylists(
+                token,
+                (collected, total) => this.status.update(collected, total, 'Loading your Spotify playlists...'),
+                (seconds)          => this.status.show(`Spotify rate limit — retrying in ${seconds}s...`)
+            );
+            this.status.hide();
+
             if (!playlists || playlists.length === 0) {
                 await notifyModal({ title: 'No Playlists Found', message: 'No playlists found in your Spotify account.' });
                 return;
@@ -214,6 +225,49 @@ class DashboardApp {
             this.status.hide();
             console.error('Spotify import failed:', err);
             await notifyModal({ title: 'Spotify Import Failed', message: err.message });
+        }
+    }
+
+    // Present playlist selector, push each selected playlist to Spotify as a new private playlist.
+    async runSpotifyExport() {
+        try {
+            // Fetch all playlists from IDB
+            const allPlaylists = await this.dataManager.getAllRecords('playlists');
+            if (!allPlaylists || allPlaylists.length === 0) {
+                await notifyModal({ title: 'No Playlists', message: 'No playlists to export.' });
+                return;
+            }
+
+            //Show playlist selector, return array of selected IDs if they exist.
+            const selectedIds = await playlistSelectModal({
+                title:        'Export to Spotify',
+                confirmLabel: 'Export',
+                playlists:    allPlaylists,
+            });
+            if (!selectedIds || selectedIds.length === 0) return;
+
+            const selected = allPlaylists.filter(pl => selectedIds.includes(pl.id));
+
+
+            //Attempt to export set of playlists, 
+            this.status.show('Exporting to Spotify...');
+            const results = await spotifyExportAdapter.exportPlaylists(
+                selected, this.dataManager,
+                (done, total, name) => this.status.update(done, total, `Exporting "${name}"...`) 
+            );
+
+            this.status.complete('Export complete.');
+
+            // Show a line per playlist: URL if created, skipped message if no Spotify URIs
+            const lines = results.map(r =>
+                r.url ? `${r.name}: ${r.url}` : `${r.name}: skipped (no Spotify URIs)`
+            );
+            await notifyModal({ title: 'Exported to Spotify', message: lines.join('\n') });
+
+        } catch (err) {
+            this.status.hide();
+            console.error('Spotify export failed:', err);
+            await notifyModal({ title: 'Spotify Export Failed', message: err.message });
         }
     }
 

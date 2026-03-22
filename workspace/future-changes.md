@@ -1,4 +1,4 @@
-
+Mostly copied from TODO comments while cleaning code. Nothing critical to the overall development of this project lives here alone.
 
 # Architecture / Internal
 - Consider extracting dropdown logic to separate module. Apply shared logic to sort dropdown? 
@@ -27,8 +27,8 @@
 # Features: (Not the main place for these)
 - Option to select all (including non-visible tracks) in workspace from handleBulkMembershipUpdate
 - Advanced creation/selection: Union, intersection, complement of sets. I'd totally use these but probably not a flagship feature to sell most users on.
-- Add toasts to confirm certain dropdown actions? (session changes that might not be immediately apparent) Just the destructive ones?
-- track a stack of user actions, facilitating undo/redo? Ties into toast idea with an undo button, but adds substantial complexity to data layer.
+- Add toasts to confirm certain dropdown actions? (session changes that might not be immediately apparent) Diverges from pattern of confirming wih text in respective components
+- track a stack of user actions, facilitating undo/redo? Ties into toast idea with an undo button, but adds substantial complexity to data or session layer.
 
 # Misc thoughts, or beyond workspace
 - Determinate progress indicators for progress bar(s) in dashboard and load process.
