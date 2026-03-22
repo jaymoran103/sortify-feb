@@ -1,7 +1,8 @@
 // Spotify export adapter. Pushes local IDB playlists to the user's Spotify account
 // as new private playlists. Delegates auth to spotifyAuthManager.
 
-import {spotifyAuthManager,SLEEP_BETWEEN_PLAYLISTS_MS} from '../spotifyAuthManager.js';
+import spotifyAuthManager from '../spotifyAuthManager.js';
+import { SLEEP_BETWEEN_PLAYLISTS_MS } from '../spotifyConfig.js';
 
 
 // API HELPERS
