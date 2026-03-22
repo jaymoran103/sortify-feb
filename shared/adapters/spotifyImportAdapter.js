@@ -1,7 +1,7 @@
 // Spotify import adapter. Fetches playlists + tracks from the Spotify API and stores
 // them in IDB via dataManager. Delegates auth to spotifyAuthManager.
 
-import spotifyAuthManager from '../spotifyAuthManager.js';
+import {SLEEP_BETWEEN_PLAYLISTS_MS} from '../spotifyConfig.js';
 import { createPlaylist, createTrack } from '../models.js';
 
 
@@ -184,7 +184,7 @@ class SpotifyImportAdapter {
             if (onProgress) onProgress(i + 1, selectedPlaylists.length, name);
 
             // Brief pause between playlists to stay under Spotify rate limits
-            if (i < selectedPlaylists.length - 1) await _sleep(spotifyAuthManager.SLEEP_BETWEEN_PLAYLISTS_MS);
+            if (i < selectedPlaylists.length - 1) await _sleep(SLEEP_BETWEEN_PLAYLISTS_MS);
         }
 
         return { totalProcessed, uniqueAdded, skipped };

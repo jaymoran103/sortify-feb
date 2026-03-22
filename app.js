@@ -42,7 +42,18 @@ class DashboardApp {
             } catch (err) {
                 console.error('Spotify auth callback failed:', err);
                 await notifyModal({ title: 'Spotify Auth Failed', message: err.message });
+                sessionStorage.removeItem('spotify_pending_action');// Cleanup pending action in case of auth failure, avoiding unexpected behavior on page reloaad
             }
+
+            // After handling the callback, check if there was a pending action (import or export) that triggered the auth flow, running it if so.
+            const pendingAction = sessionStorage.getItem('spotify_pending_action');
+            if (pendingAction === 'import') {
+                await this.runSpotifyImport();
+            } else if (pendingAction === 'export') {
+                await this.runSpotifyExport();
+            }
+
+
         }
         //TODO store attempted action before redirecting to auth flow, and trigger it here if present?
     }
@@ -70,8 +81,12 @@ class DashboardApp {
         if (choice === "local") {
             await this.runLocalImport();
         } else if (choice === "spotify") {
+            // Set pending action before auth flow in case a redirect is needed
+            // sessionStorage.setItem('spotify_pending_action', 'import');// TODO should this be here or in the method?
             await this.runSpotifyImport();
+            // sessionStorage.removeItem('spotify_pending_action');//cleanup pending action
         }
+
         // null = cancelled, do nothing
     }
 
@@ -181,6 +196,9 @@ class DashboardApp {
     // Fetch user's Spotify playlists, show selection modal, import tracks for chosen playlists.
     async runSpotifyImport() {
         try {
+            // Set pending action before auth flow in case a redirect is needed.
+            sessionStorage.setItem('spotify_pending_action', 'import');
+
             const token = await spotifyAuthManager.getAccessToken();
             // getAccessToken() may redirect — if so, app restarts and handleAuthCallback() runs on return
             if (!token) return;
@@ -225,12 +243,17 @@ class DashboardApp {
             this.status.hide();
             console.error('Spotify import failed:', err);
             await notifyModal({ title: 'Spotify Import Failed', message: err.message });
+        } finally {
+            sessionStorage.removeItem('spotify_pending_action');// Cleanup pending action regardless of success. Reaching here means the action completed on the page, so nothing is pending.
         }
     }
 
     // Present playlist selector, push each selected playlist to Spotify as a new private playlist.
     async runSpotifyExport() {
         try {
+            // Set pending action before auth flow in case a redirect is needed.
+            sessionStorage.setItem('spotify_pending_action', 'export');
+
             // Fetch all playlists from IDB
             const allPlaylists = await this.dataManager.getAllRecords('playlists');
             if (!allPlaylists || allPlaylists.length === 0) {
@@ -268,6 +291,8 @@ class DashboardApp {
             this.status.hide();
             console.error('Spotify export failed:', err);
             await notifyModal({ title: 'Spotify Export Failed', message: err.message });
+        } finally {
+            sessionStorage.removeItem('spotify_pending_action');// Cleanup pending action regardless of action success. Reaching here means the action completed on the page, so nothing is pending.
         }
     }
 
@@ -493,7 +518,7 @@ class DashboardApp {
         // playlistSelectModal returns an array of selected IDB ids, or null if cancelled
         const selectedIds = await playlistSelectModal({
             title:        "Select Playlists",
-            confirmLabel: "Open Workspace →",
+            confirmLabel: "Open Workspace",
             playlists
         });
 

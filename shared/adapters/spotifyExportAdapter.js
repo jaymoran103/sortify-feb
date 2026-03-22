@@ -1,7 +1,7 @@
 // Spotify export adapter. Pushes local IDB playlists to the user's Spotify account
 // as new private playlists. Delegates auth to spotifyAuthManager.
 
-import spotifyAuthManager from '../spotifyAuthManager.js';
+import {spotifyAuthManager,SLEEP_BETWEEN_PLAYLISTS_MS} from '../spotifyAuthManager.js';
 
 
 // API HELPERS
@@ -125,7 +125,7 @@ class SpotifyExportAdapter {
             if (onProgress) onProgress(i + 1, playlists.length, pl.name);
 
             // Brief pause between playlists to stay under Spotify rate limits
-            if (i < playlists.length - 1) await _sleep(spotifyAuthManager.SLEEP_BETWEEN_PLAYLISTS_MS);
+            if (i < playlists.length - 1) await _sleep(SLEEP_BETWEEN_PLAYLISTS_MS);
         }
 
         return results;

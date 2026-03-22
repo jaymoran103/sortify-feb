@@ -546,6 +546,8 @@ function sortTrackIDs(trackIDs, criteria) {
                 return posA - posB; // Tiebreak by original position
             }
         });
+
+        return sortedTracks;
     } 
 
     // "playlist:PlaylistID": tracks in the named playlist appear first in playlist order;

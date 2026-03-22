@@ -1,20 +1,13 @@
 // Spotify PKCE auth manager. Handles auth state independent of DOM or app.js.
 // Importable by any adapter that needs a Spotify access token.
 
+import { SPOTIFY_CLIENT_ID, SPOTIFY_REDIRECT_URI, SPOTIFY_SCOPES} from './spotifyConfig.js';
 
-const SLEEP_BETWEEN_PLAYLISTS_MS = 1000;//TODO move this and auth constants to a config file for static site, and backend after Vue refactor
-
-// AUTH CONSTANTS
-
-const CLIENT_ID    = '95ba1274418d436a8540ebee2d22c8ed';// FUTURE: Move to env var once before deployment.
-const REDIRECT_URI = window.location.origin + '/';
-const SCOPES       = 'playlist-read-private playlist-read-collaborative playlist-modify-public playlist-modify-private';
-
+// Keys for sessionStorage - move to spotifyConfig.js? if needed by other modules
 const TOKEN_KEY    = 'spotify_access_token';
 const EXPIRY_KEY   = 'spotify_token_expiry';
 const VERIFIER_KEY = 'spotify_code_verifier';
 const STATE_KEY    = 'spotify_auth_state';
-
 
 // PKCE HELPERS (keeping module-private)
 // Convert ArrayBuffer to URL-safe base64 string
@@ -61,10 +54,10 @@ class SpotifyAuthManager {
         sessionStorage.setItem(STATE_KEY,    state);
 
         const params = new URLSearchParams({
-            client_id:             CLIENT_ID,
+            client_id:             SPOTIFY_CLIENT_ID,
             response_type:         'code',
-            redirect_uri:          REDIRECT_URI,
-            scope:                 SCOPES,
+            redirect_uri:          SPOTIFY_REDIRECT_URI,
+            scope:                 SPOTIFY_SCOPES,
             code_challenge_method: 'S256',
             code_challenge:        challenge,
             state,
@@ -96,8 +89,8 @@ class SpotifyAuthManager {
         const body = new URLSearchParams({
             grant_type:    'authorization_code',
             code,
-            redirect_uri:  REDIRECT_URI,
-            client_id:     CLIENT_ID,
+            redirect_uri:  SPOTIFY_REDIRECT_URI,
+            client_id:     SPOTIFY_CLIENT_ID,
             code_verifier: verifier,
         });
 
@@ -121,7 +114,8 @@ class SpotifyAuthManager {
         sessionStorage.removeItem(VERIFIER_KEY);
         sessionStorage.removeItem(STATE_KEY);
 
-        history.replaceState({}, '', '/');
+        // Keep the current path while dropping query parameters. This ensures a clean URL once auth completes, and works for both root-hosted sites and project-site subpaths.
+        history.replaceState({}, '', window.location.pathname);
         return data.access_token;
     }
 
