@@ -85,6 +85,10 @@ class SpotifyExportAdapter {
         for (let i = 0; i < total; i += 100) {
             const chunk = uris.slice(i, i + 100);
             await _apiPost(`/playlists/${playlistId}/items`, token, { uris: chunk });
+
+            // sleep to avoid hitting rate limits for large playlists
+            await _sleep(SLEEP_BETWEEN_PLAYLISTS_MS);     
+                   
             if (onProgress) onProgress(Math.min(i + 100, total), total);
         }
     }
@@ -119,7 +123,7 @@ class SpotifyExportAdapter {
             const created = await this._createPlaylist(token, pl.name);
             await this._addTracks(
                 token, created.id, uris,
-                (done, total) => onProgress && onProgress(done, total, `Adding tracks to "${pl.name}"...`)
+                (done, total) => onProgress && onProgress(done, total,`${pl.name} - (${done}/${total})`)
             );
 
             results.push({ name: pl.name, url: created.url });

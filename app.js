@@ -229,8 +229,8 @@ class DashboardApp {
             this.status.show('Importing from Spotify...');
             const stats = await spotifyImportAdapter.importSelected(
                 this.dataManager, token, selectedPlaylists,
-                (done, total, name) => this.status.update(done, total, `Importing "${name}"...`)
-);
+                (done, total, name) => this.status.update(done, total, `Importing ${name}...`)
+            );
 
             this.status.complete(`Done. ${stats.uniqueAdded} new track(s) added.`);
             this.renderLibrary();
@@ -275,7 +275,7 @@ class DashboardApp {
             this.status.show('Exporting to Spotify...');
             const results = await spotifyExportAdapter.exportPlaylists(
                 selected, this.dataManager,
-                (done, total, name) => this.status.update(done, total, `Exporting "${name}"...`)
+                (done, total, name) => this.status.update(done, total, `Exporting: ${name}...`)
             );
 
             this.status.complete('Export complete.');

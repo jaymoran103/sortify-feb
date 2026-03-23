@@ -237,8 +237,29 @@ body {
     align-items: center;
 }
 
-.io-status-label,
+.io-status-label {
+    font-size: 0.78em;
+    color: var(--color-text-muted);
+    /* Truncate long names; counter stays fixed on the right */
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
 .io-status-counter {
     font-size: 0.78em;
     color: var(--color-text-muted);
+    flex-shrink: 0;
+    margin-left: 8px;
+}
+
+@keyframes io-flash {
+    0%   { background-color: var(--color-accent); }
+    100% { background-color: transparent; }
+}
+
+.io-status--flash {
+    animation: io-flash 0.8s ease-out;
 }

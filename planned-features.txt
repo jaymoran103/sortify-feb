@@ -7,9 +7,9 @@ Workspace Features
 - Column resizing: separate info and playlist sides, resizing handle between them
 - Column move: hover click and drag, or in a "manage playlists" menu
 [x] Base sort: Cache an unchanging array of trackIDs, first-seen order from playlists. Stable set is only updated when the track set itself changes (only on add/remove from session)
-    - When tracks are removed (via track control) do spot removal from order cache, avoiding need for a re-sort.
-    - When tracks are added (via new playlist) they'll add to the end, not-yet-seen tracks can do the same in the cached list.
-    - IF tracks were rearranged, (not currently possible, playlists dont move and there's no promised track order to change) update should be deferred to the next time a sort or filter changes the displayed rows.
+    [x] When tracks are removed (via track control) do spot removal from order cache, avoiding need for a re-sort.
+    [x] When tracks are added (via new playlist) they'll add to the end, not-yet-seen tracks can do the same in the cached list.
+    [-] IF tracks were rearranged, (not currently possible, playlists dont move and there's no promised track order to change) update should be deferred to the next time a sort or filter changes the displayed rows.
 [x] Sort by playlist: Update a cached 'current' sort list to prioritize THAT playlist. Valid case to adjust the cached set, since the user will expect the resulting update. This added complexity isn't worth it atm.
 [x] Ensure 'back to workspace' button on error page works, or is hidden. Same for any other buttons.
 
@@ -20,8 +20,8 @@ Workspace Layout
 
 Workspace Inessential
 - Playlist Locking, Hiding, Coloring
-- Sort by playlist
-- Playlist header detail: # unique, total runtime?
+[x] Sort by playlist
+[-] Playlist header detail: # unique, total runtime?
 [x] Implement a "most playlists" sort method using the same logic the similarity checker will use? 
 - support field-specific queries - artist:queen, album:blonde, even duration:>300? No current need for these
 - Sort by overlap: Most represented to least. Decide when order refreshes, might be easier to just bump sort back to "Select" default whenever user action contradicts existing sort. Gotta be a design pattern for this.
