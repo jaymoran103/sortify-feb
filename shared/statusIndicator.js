@@ -31,10 +31,14 @@ export default class StatusIndicator {
         }
     }
 
-    // Make container visible and reset to initial state
+    // Make container visible, reset to initial state, and flash to draw attention
     show(message = '') {
         this.container.removeAttribute('hidden');
         this._statusEl.classList.remove('io-status--error');
+        // Restart flash animation by forcing a reflow between class removals/additions
+        this.container.classList.remove('io-status--flash');
+        void this.container.offsetWidth;
+        this.container.classList.add('io-status--flash');
         this._bar.style.width     = '0%';
         this._label.textContent   = message;
         this._counter.textContent = '';
@@ -70,6 +74,7 @@ export default class StatusIndicator {
     hide() {
         this.container.setAttribute('hidden', '');
         this._statusEl.classList.remove('io-status--error');
+        this.container.classList.remove('io-status--flash');
         this._bar.style.width     = '0%';
         this._label.textContent   = '';
         this._counter.textContent = '';

@@ -127,16 +127,21 @@ class SpotifyImportAdapter {
     }
 
     // Import a set of selected Spotify playlists into IDB.
-    // selectedPlaylists: [{ spotifyPlaylistId, name }]
+    // selectedPlaylists: [{ spotifyPlaylistId, name, trackCount }]
     // Skips 403/restricted playlists with a warning rather than failing the whole import.
-    // onProgress(playlistsDone, playlistsTotal, label) uses playlist-level units throughout —
-    // the bar always reflects position in the overall job, not progress within a single playlist.
-    // Track-level detail is embedded in the label string during fetching.
+    // onProgress(tracksDone, tracksTotal, name) uses track-level units — bar moves per track,
+    // not per playlist. During fetch phases, done = previously stored + currently fetched.
+    // trackCount from the playlist object may not exactly match fetchPlaylistItems total
+    // (local files/deleted tracks are skipped), but the delta is small enough for the bar.
     // Returns { totalProcessed, uniqueAdded, skipped }
     async importSelected(dataManager, token, selectedPlaylists, onProgress) {
         let totalProcessed = 0;
         let uniqueAdded    = 0;
         let skipped        = 0;
+
+        // Sum declared track counts for a total — used as the bar denominator throughout
+        const totalTracks   = selectedPlaylists.reduce((sum, pl) => sum + pl.trackCount, 0);
+        let tracksImported  = 0;
 
         for (let i = 0; i < selectedPlaylists.length; i++) {
             const { spotifyPlaylistId, name } = selectedPlaylists[i];
@@ -146,8 +151,8 @@ class SpotifyImportAdapter {
             try {
                 rawTracks = await this.fetchPlaylistItems(
                     token, spotifyPlaylistId,
-                    // Bar stays at playlist i throughout fetching; track detail goes in the label
-                    (done, total) => onProgress && onProgress(i, selectedPlaylists.length, `Fetching "${name}" (${done}/${total} tracks)...`)
+                    // During fetch, show progress as previously stored + currently fetched
+                    (done, _total) => onProgress && onProgress(tracksImported + done, totalTracks, name)
                 );
             } catch (err) {
                 console.warn(`[Spotify] Skipping "${name}" (${spotifyPlaylistId}): ${err.message}`);
@@ -166,22 +171,23 @@ class SpotifyImportAdapter {
                     // Track already in IDB — still include it in this playlist's track list
                     trackIDs.push(track.trackID);
                     skipped++;
-                    continue;
+                } else {
+                    try {
+                        await dataManager.createRecord('tracks', track);
+                        trackIDs.push(track.trackID);
+                        uniqueAdded++;
+                    } catch (err) {
+                        console.error(`[Spotify] Failed to store track ${track.trackID}:`, err);
+                        skipped++;
+                    }
                 }
 
-                try {
-                    await dataManager.createRecord('tracks', track);
-                    trackIDs.push(track.trackID);
-                    uniqueAdded++;
-                } catch (err) {
-                    console.error(`[Spotify] Failed to store track ${track.trackID}:`, err);
-                    skipped++;
-                }
+                // Update bar per track stored
+                tracksImported++;
+                if (onProgress) onProgress(tracksImported, totalTracks, name);
             }
 
-            // Advance bar to next playlist position once all its tracks are stored
             await dataManager.createRecord('playlists', createPlaylist(name, trackIDs));
-            if (onProgress) onProgress(i + 1, selectedPlaylists.length, name);
 
             // Brief pause between playlists to stay under Spotify rate limits
             if (i < selectedPlaylists.length - 1) await _sleep(SLEEP_BETWEEN_PLAYLISTS_MS);
