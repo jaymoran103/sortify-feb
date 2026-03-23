@@ -19,30 +19,30 @@ class DashboardApp {
         this.dataManager = new DataManager();
 
         this.dataManager.init().then(async () => {
-            // Check if we're returning from Spotify auth redirect, handling token exchenge and storage if so.
-            await this.handleAuthCallbackIfNeeded();
             console.log("Database initialized");
             this.addEventListeners();
             this.renderLibrary();
             this.setupIO();
+
+            // Check if load was prompted by a Spotify OAuth redirect. If so, handle the callback and complete the pending action.
+            await this.handleAuthCallbackIfNeeded();
         }).catch((err) => {
             console.error("Failed to initialize database:", err);
         });
     }
 
-    // Complete Spotify auth callback if returning from OAuth redirect
+    // If returning from OAuth redirect: handle Spotify auth callback, then run the pending action that triggered the auth flow (import or export).
     async handleAuthCallbackIfNeeded() {
         const hasCode = new URLSearchParams(window.location.search).has('code');
-        // console.log(`Handling Spotify auth callback: ${hasCode}`);
         if (hasCode) {
             try {
-                console.log('Processing Spotify auth callback...');
+                console.log("Processing Spotify auth callback...");
                 await spotifyAuthManager.handleAuthCallback();
                 console.log('Spotify auth successful, access token stored.');
             } catch (err) {
                 console.error('Spotify auth callback failed:', err);
                 await notifyModal({ title: 'Spotify Auth Failed', message: err.message });
-                sessionStorage.removeItem('spotify_pending_action');// Cleanup pending action in case of auth failure, avoiding unexpected behavior on page reloaad
+                sessionStorage.removeItem('spotify_pending_action');// Cleanup pending action in case of auth failure, avoiding unexpected behavior on page reload
             }
 
             // After handling the callback, check if there was a pending action (import or export) that triggered the auth flow, running it if so.
@@ -52,10 +52,7 @@ class DashboardApp {
             } else if (pendingAction === 'export') {
                 await this.runSpotifyExport();
             }
-
-
         }
-        //TODO store attempted action before redirecting to auth flow, and trigger it here if present?
     }
 
     addEventListeners() {
@@ -82,9 +79,7 @@ class DashboardApp {
             await this.runLocalImport();
         } else if (choice === "spotify") {
             // Set pending action before auth flow in case a redirect is needed
-            // sessionStorage.setItem('spotify_pending_action', 'import');// TODO should this be here or in the method?
             await this.runSpotifyImport();
-            // sessionStorage.removeItem('spotify_pending_action');//cleanup pending action
         }
 
         // null = cancelled, do nothing
@@ -195,22 +190,24 @@ class DashboardApp {
     }
     // Fetch user's Spotify playlists, show selection modal, import tracks for chosen playlists.
     async runSpotifyImport() {
-        try {
-            // Set pending action before auth flow in case a redirect is needed.
-            sessionStorage.setItem('spotify_pending_action', 'import');
+        let shouldClearPending = false;
+        sessionStorage.setItem('spotify_pending_action', 'import');
 
+        try {
+
+            // Ensure session has a valid token, redirecting if not.
             const token = await spotifyAuthManager.getAccessToken();
-            // getAccessToken() may redirect — if so, app restarts and handleAuthCallback() runs on return
             if (!token) return;
 
-            // Fetch user's playlists with progress on the status bar.
-            // FUTURE: open/update modal for loading state (spinning wheel or 'loading...' text) to indicate something is still happening. 
-            //       if timing for access is predictable we could do a load indicator a default estimate, updated as info comes
+            // If reached, ensure the pending action will be cleared once this try block finishes.
+            shouldClearPending = true;
+            
+            // Fetch playlists, showing progress in the status indicator. Then show playlist selection modal.
             this.status.show('Loading your Spotify playlists...');
             const playlists = await spotifyImportAdapter.fetchUserPlaylists(
                 token,
                 (collected, total) => this.status.update(collected, total, 'Loading your Spotify playlists...'),
-                (seconds)          => this.status.show(`Spotify rate limit — retrying in ${seconds}s...`)
+                (seconds)          => this.status.show(`Hit Spotify rate limit — retrying in ${seconds}s...`)
             );
             this.status.hide();
 
@@ -218,7 +215,6 @@ class DashboardApp {
                 await notifyModal({ title: 'No Playlists Found', message: 'No playlists found in your Spotify account.' });
                 return;
             }
-
             // Show Spotify playlist selector — returns array of spotifyPlaylistId strings
             const selectedIds = await spotifyPlaylistSelectModal({
                 title:        'Select Playlists to Import',
@@ -234,7 +230,7 @@ class DashboardApp {
             const stats = await spotifyImportAdapter.importSelected(
                 this.dataManager, token, selectedPlaylists,
                 (done, total, name) => this.status.update(done, total, `Importing "${name}"...`)
-            );
+);
 
             this.status.complete(`Done. ${stats.uniqueAdded} new track(s) added.`);
             this.renderLibrary();
@@ -244,24 +240,27 @@ class DashboardApp {
             console.error('Spotify import failed:', err);
             await notifyModal({ title: 'Spotify Import Failed', message: err.message });
         } finally {
-            sessionStorage.removeItem('spotify_pending_action');// Cleanup pending action regardless of success. Reaching here means the action completed on the page, so nothing is pending.
+            if (shouldClearPending) sessionStorage.removeItem('spotify_pending_action');
         }
     }
 
     // Present playlist selector, push each selected playlist to Spotify as a new private playlist.
     async runSpotifyExport() {
-        try {
-            // Set pending action before auth flow in case a redirect is needed.
-            sessionStorage.setItem('spotify_pending_action', 'export');
+        let shouldClearPending = false;
+        sessionStorage.setItem('spotify_pending_action', 'export');
 
-            // Fetch all playlists from IDB
+        try {
+            const token = await spotifyAuthManager.getAccessToken();
+            if (!token) return;
+
+            shouldClearPending = true;
+
             const allPlaylists = await this.dataManager.getAllRecords('playlists');
             if (!allPlaylists || allPlaylists.length === 0) {
                 await notifyModal({ title: 'No Playlists', message: 'No playlists to export.' });
                 return;
             }
 
-            //Show playlist selector, return array of selected IDs if they exist.
             const selectedIds = await playlistSelectModal({
                 title:        'Export to Spotify',
                 confirmLabel: 'Export',
@@ -276,7 +275,7 @@ class DashboardApp {
             this.status.show('Exporting to Spotify...');
             const results = await spotifyExportAdapter.exportPlaylists(
                 selected, this.dataManager,
-                (done, total, name) => this.status.update(done, total, `Exporting "${name}"...`) 
+                (done, total, name) => this.status.update(done, total, `Exporting "${name}"...`)
             );
 
             this.status.complete('Export complete.');
@@ -292,7 +291,11 @@ class DashboardApp {
             console.error('Spotify export failed:', err);
             await notifyModal({ title: 'Spotify Export Failed', message: err.message });
         } finally {
-            sessionStorage.removeItem('spotify_pending_action');// Cleanup pending action regardless of action success. Reaching here means the action completed on the page, so nothing is pending.
+
+            // Clear pending action flag so it doesn't trigger unexpectedly on a future page load after the auth flow completes and the user returns to the app. This is important to avoid confusion if the user reloads or revisits the page later — without this, the app would check for a pending action on every load, see the leftover 'export' or 'import' value from this session, and immediately try to run that flow again (potentially triggering an unwanted Spotify auth flow or other side effects) even though the user isn't actively trying to do that anymore. By clearing it here, we ensure that the pending action only exists in sessionStorage during the actual auth flow when it's needed, and won't cause unexpected behavior on future visits or reloads.
+            if (shouldClearPending) {
+                sessionStorage.removeItem('spotify_pending_action');
+            }
         }
     }
 
