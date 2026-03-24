@@ -12,6 +12,7 @@ import spotifyImportAdapter from "./shared/adapters/spotifyImportAdapter.js";
 import spotifyExportAdapter from "./shared/adapters/spotifyExportAdapter.js";
 
 import { menuModal, notifyModal, warningModal, playlistSelectModal, spotifyPlaylistSelectModal } from "./shared/modal.js";
+import { dropdownMenu } from "./shared/dropdown.js";
 
 class DashboardApp {
 
@@ -60,8 +61,8 @@ class DashboardApp {
         document.getElementById("import-btn").addEventListener("click", this.handleImport.bind(this));
         document.getElementById("export-btn").addEventListener("click", this.handleExport.bind(this));
         document.getElementById("open-workspace-btn").addEventListener("click", this.handleOpenWorkspace.bind(this));
-        document.getElementById("delete-playlists-btn").addEventListener("click", this.handleDeletePlaylists.bind(this));
-        document.getElementById("clear-storage-btn").addEventListener("click", this.handleClearStorage.bind(this));
+
+        this.setupLibraryControls();
 
         document.getElementById("library-view-select").addEventListener("change", (e) => {
             this.libraryView = e.target.value;
@@ -383,7 +384,7 @@ class DashboardApp {
             return;
         }
 
-        // Render stats bar (common to both views)
+        // Render stats bar (common to both views) // FUTURE extract html
         if (statsContainer && playlists.length > 0) {
             const totalTracks  = playlists.reduce((sum, pl) => sum + (pl.trackIDs?.length ?? 0), 0);
             const uniqueTracks = tracks.length;
@@ -474,6 +475,35 @@ class DashboardApp {
 
         container.appendChild(fragment);
         console.log(`Library rendered: ${tracks.length} tracks`);
+    }
+
+    // Setup library action dropdown in the card control bar.
+    setupLibraryControls() {
+        const btn = document.getElementById("library-actions-btn");
+        if (!btn) return;
+
+        btn.addEventListener("click", (event) => {
+            event.stopPropagation();
+
+            if (dropdownMenu.isOpen) {
+                dropdownMenu.close();
+                return;
+            }
+
+            const rect = btn.getBoundingClientRect();
+            const x = rect.left;
+            const y = rect.bottom + 8;
+
+            dropdownMenu.open(this.getLibraryControlMenuItems(), x, y);
+        });
+    }
+
+    //TODO move definition elsewhere
+    getLibraryControlMenuItems() {
+        return [
+            { label: "Delete Playlists", action: async () => { await this.handleDeletePlaylists(); }},
+            { label: "Clear Storage", action: async () => { await this.handleClearStorage(); }},
+        ];
     }
 
 
