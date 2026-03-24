@@ -35,7 +35,17 @@ class DropdownMenu {
             const li = document.createElement("li");
             if (item.divider) {
                 li.className = "dropdown__divider";
-            } else {
+            } 
+            
+            //Skipping stubs for now
+            else if (item.stub) {
+                // Stub: visible but non-interactive. Used for edge-position items (e.g. Move Left at index 0).
+                // li.textContent = item.label;
+                // li.className = "dropdown__item--stub";
+                continue;
+            } 
+            
+            else {
                 li.textContent = item.label;
                 li.addEventListener("click", () => {
                     item.action();

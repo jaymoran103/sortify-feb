@@ -1,5 +1,3 @@
-import { matchesTrackSearch, matchesPlaylistSearch } from "./trackUtils.js";
-
 // Lightweight modal controller. One modal open at a time.
 // DOM shell is built once on import and persists in the body; visibility toggled via modal-overlay--visible.
 
@@ -120,7 +118,8 @@ const _modal = new ModalController();
 
 // Open a text-input modal. Returns the trimmed input string, or null if cancelled/dismissed/empty.
 // args: title, confirmLabel, cancelLabel, defaultValue, placeholder, validate(value) => errorMessage or null
-export function promptModal({ title, confirmLabel = "OK", cancelLabel = "Cancel", defaultValue = "", placeholder = "", validate } = {}) {
+export function promptModal({ title, confirmLabel = "OK", cancelLabel = "Cancel", defaultValue = "", placeholder = "", validate, message=null} = {}) {
+    console.warn("Given message: ", message);
     let inputEl, errorEl;
 
     // Try to confirm: validate input if validator provided, showing inline error if invalid. 
@@ -129,6 +128,7 @@ export function promptModal({ title, confirmLabel = "OK", cancelLabel = "Cancel"
         const value = inputEl.value.trim();
         if (validate) {
             const error = validate(value);
+    
             if (error) {
                 // Show inline error and keep modal open
                 errorEl.textContent = error;
@@ -150,6 +150,13 @@ export function promptModal({ title, confirmLabel = "OK", cancelLabel = "Cancel"
 
         
         body(container) {
+            // Add text above input if a message is given
+            if (message) {
+                const msg = document.createElement("p");
+                msg.className = "modal__message"; // style already exists
+                msg.textContent = message;
+                container.appendChild(msg);
+            }
             //Input elements
             inputEl             = document.createElement("input");
             inputEl.type        = "text";
@@ -222,14 +229,13 @@ export function warningModal({ title, message, actions = [] } = {}) {
 function _openSelectModal({ title,
                             confirmLabel = "Add",
                             cancelLabel = "Cancel",
-                            playlists = [],
+                            items = [],
                             getID,
                             getCount,
                             searchPlaceholder = "Search playlists\u2026",
                             sortOptions = null,
                             sortSelected = false,
-                            offerSelectAll = true,
-                            searchMatcher = (item, query) => (item.name || "").toLowerCase().includes(query) }) {
+                            offerSelectAll = true }) {
     let selectedIds = new Set();
     let noteEl;
 
@@ -264,7 +270,14 @@ function _openSelectModal({ title,
 
         const nameSpan       = document.createElement("span");
         nameSpan.className   = "modal__list-row-name";
-        nameSpan.textContent = item.name;
+        
+        //Hack to give track items a searchable name including arist
+        nameSpan.textContent = item.name ??= item.title+" - "+item.artist;
+
+        //Debug ensure every item has a name/title property to show in the list. FUTURE: Enforce typing/fields when refactoring
+        if (!nameSpan.textContent){
+            console.error(`Item is missing a name/title property: ${item} - In selection modal: ${title}` );
+        }
 
         label.appendChild(checkbox);
         label.appendChild(nameSpan);
@@ -300,20 +313,14 @@ function _openSelectModal({ title,
         list.appendChild(emptyMsg);
     }
 
-    // Sort the source playlists array by the given criteria and re-render the list.
+    // Sort the source items array by the given criteria and re-render the list.
     // Rows are rebuilt in the new order; existing DOM nodes are replaced.
     // FUTURE: make sort options dynamic
     function applySortAndRender(criteria, list) {
-        const sorted = [...playlists].sort((a, b) => {
+        const sorted = [...items].sort((a, b) => {
             switch (criteria) {
                 case "name":
                     return (a.name || "").localeCompare(b.name || "");
-                case "title":
-                    return (a.title || "").localeCompare(b.title || "");
-                case "artist":
-                    return (a.artist || "").localeCompare(b.artist || "");
-                case "album":
-                    return (a.album || "").localeCompare(b.album || "");
                 case "last-modified":
                     // Nulls sort last
                     if (!a.lastModified && !b.lastModified) return 0;
@@ -322,6 +329,10 @@ function _openSelectModal({ title,
                     return new Date(b.lastModified) - new Date(a.lastModified);
                 case "track-count":
                     return (getCount(b) ?? 0) - (getCount(a) ?? 0);
+                case "artist":
+                    return (a.artist || "").localeCompare(b.artist || "");
+                case "album":
+                    return (a.album || "").localeCompare(b.album || "");
                 default:
                     return 0;
             }
@@ -338,7 +349,7 @@ function _openSelectModal({ title,
         // Re-apply current search query visibility after re-ordering.
         const query = currentQuery();
         for (const { label, item } of rows) {
-            label.hidden = !!query && !searchMatcher(item, query);
+            label.hidden = !!query && !(item.name || "").toLowerCase().includes(query);
         }
 
         // Restore checked state from selectedIds.
@@ -415,7 +426,7 @@ function _openSelectModal({ title,
             emptyMsg.hidden    = true;
 
             // One row per item — populate rows array in place (shared with sort/reorder helpers).
-            for (const item of playlists) {
+            for (const item of items) {
                 rows.push(buildRow(item, list));
             }
             list.appendChild(emptyMsg);
@@ -428,7 +439,7 @@ function _openSelectModal({ title,
                 _currentQuery = searchInput.value.trim().toLowerCase();
                 let visibleCount = 0;
                 for (const { label, item } of rows) {
-                    const match = !_currentQuery || searchMatcher(item, _currentQuery);
+                    const match = !_currentQuery || (item.name || "").toLowerCase().includes(_currentQuery);
                     label.hidden = !match;
                     if (match) visibleCount++;
                 }
@@ -478,9 +489,11 @@ function _openSelectModal({ title,
     });
 }
 
+
 // Sort options offered in the playlist selector. Separate constant so callers can extend if needed.
 const PLAYLIST_SORT_OPTIONS = [
-    { value: "name",          label: "Playlist Name" },
+    { value: "name",          label: "Name A–Z" },
+    { value: "name-desc",     label: "Name Z–A" },
     { value: "last-modified", label: "Last Modified" },
     { value: "track-count",   label: "Track Count" },
 ];
@@ -491,12 +504,14 @@ const PLAYLIST_SORT_OPTIONS = [
 // TODO: decide whether to pre-filter already-loaded playlists at the call site or show all with a note.
 export function playlistSelectModal({ title = "Select Playlists", confirmLabel = "Add", cancelLabel = "Cancel", playlists = [] } = {}) {
     return _openSelectModal({
-        title, confirmLabel, cancelLabel, playlists,
-        getID:         pl => pl.id,
-        getCount:      pl => pl.trackIDs?.length ?? 0,
-        searchMatcher: matchesPlaylistSearch,
-        sortOptions:   PLAYLIST_SORT_OPTIONS,
-        sortSelected:  true,
+        title, 
+        confirmLabel, 
+        cancelLabel, 
+        items:       playlists, //playlist array routes to modal body as 'items'
+        getID:       pl => pl.id,
+        getCount:    pl => pl.trackIDs?.length ?? 0,
+        sortOptions: PLAYLIST_SORT_OPTIONS,
+        sortSelected: true,
     });
 }
 
@@ -505,7 +520,10 @@ export function playlistSelectModal({ title = "Select Playlists", confirmLabel =
 // Returns an array of selected spotifyPlaylistId strings, or null if cancelled/dismissed.
 export function spotifyPlaylistSelectModal({ title = "Select Playlists", confirmLabel = "Import", cancelLabel = "Cancel", playlists = [] } = {}) {
     return _openSelectModal({
-        title, confirmLabel, cancelLabel, playlists,
+        title, 
+        confirmLabel, 
+        cancelLabel, 
+        items:    playlists, // playlist array routes to modal body as 'items'
         getID:    pl => pl.spotifyPlaylistId,
         getCount: pl => pl.trackCount,
     });
@@ -513,35 +531,27 @@ export function spotifyPlaylistSelectModal({ title = "Select Playlists", confirm
 
 // Sort options for the track selector. Title/artist/album match workspace sort keys.
 const TRACK_SORT_OPTIONS = [
-    { value: "title",  label: "Title" },
-    { value: "artist", label: "Artist" },
-    { value: "album",  label: "Album" },
+    { value: "name",      label: "Title" },
+    { value: "artist",    label: "Artist" },
+    // { value: "album",     label: "Album" },// Dont want unless we're displaying that metadata in the row.
 ];
 
-// NOTE: no direction options (ascending only) as requested.
-
-// Track selector modal — local tracks.
-// tracks: array of { trackID, title, artist, album, ... }
+// FUTURE: Track selector modal — local IDB tracks.
+// tracks: array of { trackID, title, artist, album }
 // Returns an array of selected trackIDs, or null if cancelled/dismissed.
 export function trackSelectModal({ title = "Select Tracks", confirmLabel = "Add", cancelLabel = "Cancel", tracks = [] } = {}) {
-    // Make a lightweight display name combining title and artist for filtering.
-    const displayItems = tracks.map((t) => ({
-        ...t,
-        name: t.title ? `${t.title}${t.artist ? ` — ${t.artist}` : ""}` : t.trackID
-    }));
-
+    // console.warn("trackSelectModal not yet implemented.");
+    // return Promise.resolve(null);
     return _openSelectModal({
-        title,
-        confirmLabel,
+        title, 
+        confirmLabel, 
         cancelLabel,
-        playlists: displayItems,
-        getID: (t) => t.trackID,
-        getCount: () => null,
+        items:              tracks,                    
+        getID:              t => t.trackID,
+        getCount:           () => null,             // no count column for tracks
         searchPlaceholder: "Search tracks\u2026",
-        searchMatcher: matchesTrackSearch,
-        sortOptions: TRACK_SORT_OPTIONS,
-        sortSelected: true,
-        offerSelectAll: true
+        sortOptions:        TRACK_SORT_OPTIONS,
+        sortSelected:       true,
     });
 }
 

@@ -333,9 +333,10 @@ button.modal__btn--danger:hover {
     background-color: var(--color-row-hover);
 }
 .dropdown__item--stub {
-    color: var(--color-text-muted);
+    /* color: var(--color-text-muted); */
+    color: #bbbbbb; /* TODO: Make this slightly grayer than text-muted, indicating a disabled option. Should have distinct tags, ensuring general gray displays show different than unavailable elements*/
     cursor: default;
-    font-style: italic;
+    /* font-style: italic; */
 }
 .dropdown__divider {
     border-top: 1px solid var(--color-border);

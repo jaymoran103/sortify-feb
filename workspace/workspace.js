@@ -23,7 +23,7 @@ let modifiedPlaylists = new Set(); // Set of 'dirty' playlist IDs to save.
 // Display tate fields: Represent the current UI state for sorting and filtering.
 let currentFilter = "";         // lowercased search query, modified by search input event listener. Empty string means no filter
 let currentSort = "order-added"; // Sort state for table rendering. "order-added" uses stableOrder directly; other values compute a sort.
-let stableOrder = [];           // Array of all trackIDs in first-seen order, used as the unchanging base for all display ordering. Set once at load, updated only when tracks are added/removed from the workspace.
+let stableOrder = [];           // Array of all trackIDs in first-seen order, used as the unchanging base for all display ordering. Set once at load, updated only when tracks are added/removed from the workspace, or playlist display order changes.
 let cachedFilteredIDs = null;   // Array representing a filtered subset of stableOrder for the current filter. Reset when filter changes or track set changes.
 
 // Selection state: stored trackID(s) of currently selected row(s), and index of last clicked row for shift-click range selection.
@@ -767,6 +767,19 @@ async function handleSave() {
  *  ===============
  */
 
+// Swap a playlist column left (-1) or right (+1) by swapping adjacent entries in the playlists array.
+function handleMovePlaylist(playlistID, direction) {
+    const idx = playlists.findIndex(p => p.playlistID === playlistID);
+    const newIdx = idx + direction;
+    if (newIdx < 0 || newIdx >= playlists.length) return;
+    [playlists[idx], playlists[newIdx]] = [playlists[newIdx], playlists[idx]];
+    refreshWorkspace();
+
+    //Rebuild stable order to reflect new playlist sequence. This should be the only time the order is rebuilt outside of track set changes, since the playlist order is the basis for the original stable order.
+    stableOrder = collectTrackIDsInOrder(playlists); 
+}
+
+
 // Returns items array [{ label, action } | { divider: true }] for the given dropdown mode.
 // Handles "track" -> "track-multi" upgrade and empty-selection guard internally.
 function buildDropdownItems(mode, id) {
@@ -790,6 +803,11 @@ function buildDropdownItems(mode, id) {
                 { label: "Select all Tracks",           action: () => handleBulkMembershipUpdate(playlistID, true) },
                 { label: "Deselect all Tracks",         action: () => handleBulkMembershipUpdate(playlistID, false) },
                 { label: "Sort by this playlist",       action: () => setSortByPlaylist(playlistID) },
+                
+                { divider: true },
+                { label: "Move Left",  stub: atLeft,  action: () => handleMovePlaylist(playlistID, -1) },
+                { label: "Move Right", stub: atRight, action: () => handleMovePlaylist(playlistID,  1) },
+    
                 { divider: true },
                 { label: "Rename Playlist",             action: () => handleRenamePlaylist(playlistID) },
                 { label: "Duplicate Playlist",          action: () => handleDuplicatePlaylist(playlistID) },
@@ -1112,6 +1130,8 @@ async function handleCreateEmptyPlaylist() {
 // In the absence of an existing playlist, a new one is created to hold the imported tracks.
 async function handleAddTrackToWorkspace() {
     const allTracks = await session.dataManager.getAllRecords("tracks");
+    // console.log("All tracks in library:", allTracks);//DEBUG
+
     if (!allTracks || allTracks.length === 0) {
         await notifyModal({ title: "No Tracks Available", message: "No tracks are available in library to add to workspace." });
         return;
@@ -1122,6 +1142,7 @@ async function handleAddTrackToWorkspace() {
         await notifyModal({ title: "No New Tracks", message: "All available tracks are already present in the workspace." });
         return;
     }
+    // console.log("Candidate tracks:", candidateTracks);//DEBUG
 
     const selectedTrackIDs = await trackSelectModal({
         title: "Add Tracks",
