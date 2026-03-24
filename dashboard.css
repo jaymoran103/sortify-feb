@@ -1,4 +1,5 @@
 @import './shared/base.css';
+@import './shared/components.css';
 
 /* ========== LAYOUT ========== */
 
@@ -25,7 +26,7 @@ body {
     gap: 10px;
     height: 46px;
     background: var(--color-header-page);
-    border-bottom: var(--standard-border);
+    border-bottom: var(--border-standard);
     padding: 0 28px;
     flex-shrink: 0;
 }
@@ -192,7 +193,7 @@ body {
 }
 
 /* Full-width button used in workspace card */
-.btn-full {
+.btn--full {
     width: 100%;
 }
 

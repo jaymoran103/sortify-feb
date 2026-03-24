@@ -1,26 +1,31 @@
 /* Base styling, currently just for workspace */
 
 :root {
-    /* Colors */
-    --color-bg:                 #212121;
-    --color-header-page:        #222;
+    /* Surface Colors */
+    --color-bg:                 #212121; /* basic background */
+    
+    --color-surface:            #272727; /* card body background, one step above --color-bg */
+    --color-surface-hi:         #313131; /* hover/highlight within a surface */
+
+    --color-header-page:        #222; /* Evaluate relationship between this and surfaces, and ramifications to hierarchy*/
     --color-header-table:       #222;
+
     --color-row:                #333;
     --color-row-hover:          #444;
     --color-row-selected:       #555;
     --color-checkbox-row-hover: #7f9181;
-    --color-border:             #000;
+
     --color-text:               #ccc;
     --color-text-muted:         #888;
     --color-button-text:        #000;
     
-    /* Color Definitions */
+    /* Color Palette */
     --color-green:              rgb(56, 137, 65);
-    --color-green-emphasis:        rgb(56, 214, 83); 
+    --color-green-emphasis:     rgb(56, 214, 83); 
     --color-red:                rgb(198, 49, 49);
-    --color-red-emphasis:          rgb(255, 113, 113);
-    --color-blue:               rgb(56, 120, 137); /* for testing color abstraction for now, honestly i like the look though */ 
-    --color-blue-emphasis:         rgb(56, 207, 214);
+    --color-red-emphasis:       rgb(255, 113, 113);
+    --color-blue:               rgb(56, 120, 137);
+    --color-blue-emphasis:      rgb(56, 207, 214);
 
     /* Actual semantic tokens to use in components */
     --color-accent:             var(--color-green);
@@ -28,20 +33,25 @@
     --color-error:              var(--color-red);
     --color-error-hover:        var(--color-red-emphasis);
 
-    --color-button-primary:        var(--color-accent);      /*no difference for now*/
-    --color-button-primary-hover:  var(--color-accent-hover);/*no difference for now*/
+    --color-button-primary:        var(--color-accent);       /*no difference for now*/
+    --color-button-primary-hover:  var(--color-accent-hover); /*no difference for now*/
 
     --color-button-cancel:   #9e9da9;
     --color-button-cancel-hover:   rgb(130, 130, 130);
 
     --color-disabled:           rgb(120, 120, 120);
 
-    /* Surface hierarchy */
-    --color-surface:            #272727; /* card body background, one step above --color-bg */
-    --color-surface-hi:         #313131; /* hover/highlight within a surface */
+    /* Derived semantic tokens */
+    --color-accent-subtle:      color-mix(in srgb, var(--color-accent) 15%, transparent); /* tinted accent bg, e.g. checked list rows */
+    --color-accent-text:        var(--color-green-emphasis);   /* links and labels on dark bg */
+
+    /* Borders */
+    --color-border:             #000;
+    --border-standard: 2px solid var(--color-border);
     --border-soft:              2px solid #3a3a3a; /* softer separator for card internals */
     --border-emphasized:        2px solid #fff; /* for emphasis on important elements like selected rows */
-    --card-height:              400px;   /* shared fixed height for dashboard cards */ 
+
+    --card-height:              400px; /* shared fixed height for dashboard cards */ 
  
     /* Fonts */
     --font-family:        sans-serif;
@@ -50,13 +60,8 @@
     --font-size-button:   0.85em;
     --font-size-metadata: 0.9em;
 
-    /* Borders */
-    --standard-border:  2px solid var(--color-border); /* TODO change convention to --border-standard / --border-light / --border-soft??*/
-    /* --light-border:     1px solid var(--color-border); */
-    /* --soft-border:     1px solid #222; */
-
     /* Other */
-    --transition-fast:  150ms ease;
+    --transition-fast:  150ms ease; /* Define a slower transition for progress indicator flashing */
 }
 
 /* Ensure box-sizing globally */
@@ -78,264 +83,3 @@ button {
     font-family: inherit;
 }
 
-
-/* ========== BUTTONS ========== */
-
-button {
-    background-color: var(--color-accent);
-    color: var(--color-button-text);
-    cursor: pointer;
-    transition: background-color var(--transition-fast), font-weight var(--transition-fast);
-    height: 32px;
-    vertical-align: middle;
-    font-size: var(--font-size-button);
-    /* border: var(--standard-border); */
-}
-button:disabled {
-    background-color: var(--color-disabled);
-    cursor: default;
-}
-button:hover:not(:disabled) {
-    background-color: var(--color-accent-hover);
-    text-decoration: underline;
-    font-weight: 500;
-}
-
-
-/* ========== MODAL ========== */
-/* FUTURE: extract to separate class if base.css accumulates to many components like this */
-.modal-overlay {
-    display: none;
-    position: fixed;
-    inset: 0;
-    background: rgba(0, 0, 0, 0.6);
-    z-index: 2000;
-    align-items: center;
-    justify-content: center;
-}
-.modal-overlay--visible {
-    display: flex;
-}
-
-.modal {
-    background-color: var(--color-row);
-    border: var(--standard-border);
-    min-width: 320px;
-    max-width: 420px;
-    width: 90%;
-    display: flex;
-    flex-direction: column;
-    gap: 16px;
-    padding: 20px 24px;
-}
-
-.modal__title {
-    margin: 0;
-    font-size: 1.1em;
-    font-weight: 600;
-    color: var(--color-text);
-}
-
-.modal__body {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-}
-
-.modal__input {
-    background-color: var(--color-bg);
-    color: var(--color-text);
-    /* border: var(--standard-border); */
-    padding: 4px 8px;
-    height: 32px;
-    width: 100%;
-    font-size: var(--font-size-controls);
-}
-
-.modal__message {
-    color: var(--color-text);
-    font-size: var(--font-size-controls);
-    margin: 0;
-}
-
-.modal__error {
-    color: var(--color-red); /* soft red — FUTURE: add --color-error token */
-    font-size: var(--font-size-controls);
-    margin: 0;
-}
-
-.modal__footer {
-    display: flex;
-    justify-content: flex-end;
-    gap: 8px;
-}
-
-/* Modal button styling */
-.modal__btn {
-    padding: 5px 14px;
-    height: 32px;
-    font-size: var(--font-size-button);
-    cursor: pointer;
-    border: var(--standard-border);
-    transition: background-color var(--transition-fast);
-}
-.modal__btn--confirm,
-.modal__btn--primary {
-    background-color: var(--color-accent);
-    color: var(--color-button-text);
-    border: var(--standard-border);
-
-    /* border-color: transparent; */
-}
-.modal__btn--confirm:hover,
-.modal__btn--primary:hover {
-    background-color: var(--color-accent-hover);
-}
-.modal__btn--confirm:disabled,
-.modal__btn--primary:disabled {
-    background-color: var(--color-disabled);
-    cursor: default;
-}
-.modal__btn--cancel {
-    background-color: var(--color-button-cancel);
-    border: var(--standard-border);
-
-    /* color: var(--color-text); */
-}
-.modal__btn--cancel:hover {
-    background-color: var(--color-button-cancel-hover);
-}
-.modal__btn--danger {
-    /* background-color: transparent; */
-    background-color: var(--color-red);
-    color: var(--color-button-text);
-    /* border-color: var(--color-red); */
-}
-/* Fix specificity issue with green hover effect */
-button.modal__btn--danger:hover {
-    background-color: var(--color-red-hover);
-}
-
-/* List-variant additions (playlist selector, future export picker) */
-
-.modal--list {
-    max-width: 400px;
-}
-
-.modal__search-input {
-    width: 100%;
-    background-color: var(--color-row-hover);
-    color: var(--color-text);
-    border: var(--standard-border);
-    padding: 4px 8px;
-    height: 32px;
-    font-size: var(--font-size-controls);
-}
-.modal__search-input::placeholder {
-    color: var(--color-text-muted);
-}
-
-.modal__list {
-    max-height: 280px;
-    overflow-y: auto;
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-}
-
-.modal__list-row {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 7px 10px;
-    background-color: var(--color-row-hover);
-    border: var(--standard-border);
-    cursor: pointer;
-    user-select: none;
-    font-size: var(--font-size-controls);
-}
-.modal__list-row:hover {
-    border-color: var(--color-text-muted);
-}
-.modal__list-row--checked {
-    border-color: var(--color-accent);
-    background-color: rgba(65, 137, 56, 0.15);
-}
-.modal__list-row input[type="checkbox"] {
-    accent-color: var(--color-accent);
-    cursor: pointer;
-    flex-shrink: 0;
-}
-.modal__list-row-name {
-    flex: 1;
-}
-.modal__list-row-count {
-    color: var(--color-text-muted);
-    font-size: 0.85em;
-    flex-shrink: 0;
-}
-
-.modal__list-empty {
-    color: var(--color-text-muted);
-    font-size: var(--font-size-controls);
-    padding: 8px 0;
-    margin: 0;
-}
-
-.modal__footer-note {
-    font-size: var(--font-size-controls);
-    color: var(--color-text-muted);
-    align-self: center;
-    margin-right: auto;
-}
-
-/* Button variant for menu rows */
-.modal__menu-btn {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    width: 100%;
-    height: 50px;
-    padding: 12px 14px;
-    background-color: var(--color-accent);
-    color: var(--color-button-text);
-    cursor: pointer;
-    border: var(--standard-border);
-
-    /* text-align: left; */
-    /* font-size: var(--font-size-controls); */
-    transition: background-color var(--transition-fast);
-}
-.modal__menu-btn:hover {
-    /* color: var(--color-text);     */
-    /* background-color: var(--color-accent-hover); */
-    text-decoration: none;/* no underline */
-}
-.modal__menu-btn--primary {
-    /* color: var(--color-text);     */
-    background-color: var(--color-accent); /* No difference for now */
-    /* border: var(--border-emphasized); */
-}
-/* override base button hover for primary menu rows */
-.modal__menu-btn--primary:hover {
-    /* No difference for now */    
-    background-color: var(--color-accent-hover);
-}
-
-.modal__menu-btn-text {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-}
-.modal__menu-btn-label {
-    display: block;
-}
-.modal__menu-btn-sub {
-    display: block;
-    font-size: 0.78em;
-    color: var(--color-text-muted);
-}
-.modal__menu-btn--primary .modal__menu-btn-sub {
-    color: rgba(255,255,255,0.55);
-}
