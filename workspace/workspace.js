@@ -785,28 +785,60 @@ function buildDropdownItems(mode, id) {
     switch (mode) {
         case "playlist": {
             const playlistID = id;
-            return [
+
+            const core_items = [
                 { label: "Select all Tracks",           action: () => handleBulkMembershipUpdate(playlistID, true) },
                 { label: "Deselect all Tracks",         action: () => handleBulkMembershipUpdate(playlistID, false) },
-                { divider: true },
                 { label: "Sort by this playlist",       action: () => setSortByPlaylist(playlistID) },
                 { divider: true },
                 { label: "Rename Playlist",             action: () => handleRenamePlaylist(playlistID) },
                 { label: "Duplicate Playlist",          action: () => handleDuplicatePlaylist(playlistID) },
                 { label: "Remove from workspace",       action: () => handleRemovePlaylist(playlistID) },
+            ]
+
+            //Conditionally add Spotify and Copy ID options if this playlist has a spotifyURI
+            const playlistObject = playlists.find(p => p.playlistID === playlistID);
+            const playlistURI = playlistObject?.playlistURI;
+            // const playlistURI = playlists.find(p => p.playlistID === playlistID)?.playlistURI;
+            // console.table(playlistObject);
+            // console.log(playlistURI);
+            if (playlistURI) {
+                 core_items.push(
+                    { divider: true },
+                    { label: "Open in Spotify",             action: () => handleOpenSpotifyURI(playlistURI)},
+                    { label: "Copy Playlist ID",            action: () => handleCopyID(playlistURI,"playlist")},
+                );
+            }
+
+            return [
+                ...core_items
             ];
         }
         case "track":
             //NOTE: most track actions don’t expect an id — handlers reference selectedTrackIDs directly.
-            return [
+
+            const core_items = [
                 { label: "Add to all Playlists",        action: () => handleAddTrackToAll()},
                 { label: "Remove from all Playlists",   action: () => handleRemoveTrackFromAll()},
                 { divider: true },
                 { label: "Delete Track from workspace", action: () => handleDeleteTrack()},
-                { divider: true },
-                // These two are only reachable when one track is selected (multi-track handled above).
-                { label: "Open in Spotify",             action: () => handleOpenInSpotify([...selectedTrackIDs][0])},
-                { label: "Copy Track ID",               action: () => handleCopyTrackID([...selectedTrackIDs][0])},
+            ]
+
+            //FUTURE replace with URI specific field rather than trackID
+            const trackID = [...selectedTrackIDs][0];
+            // const trackID = id.keys().next().value;
+
+            // Conditionally add Spotify and Copy ID options if this trackID has a Spotify URI (verified by string comparison for now)
+            if (trackID.startsWith("spotify:track:")) {
+                core_items.push(
+                    { divider: true },
+                    { label: "Open in Spotify", action: () => handleOpenSpotifyURI(trackID) },
+                    { label: "Copy Track ID",    action: () => handleCopyID(trackID,"track") }
+                );
+            }
+
+            return [
+                ...core_items
             ];
         case "track-multi":
             //NOTE: most track actions don’t expect an id, since handlers reference selectedTrackIDs directly.
@@ -965,30 +997,59 @@ async function handleDeleteTrack() {
 }
 
 
-// Handler for opening a track in Spotify. Validates track ID format before attempting to open.
-function handleOpenInSpotify(trackID) {
-    console.log(trackID);
-    if (trackID.startsWith("spotify:track:")) {
-        // NOTE: Very dependent on my client settings, not a permanent feature or solution
-        window.location.href = trackID; //Open directly in window, links right to app 
-        // window.open(`https://open.spotify.com/track/${trackID.split(":").pop()}`, "_blank");
-        // window.open(trackID);
-        return;
-    }
-    notifyModal({
-        title: "Cannot Open in Spotify",
-        message: "Track ID does not appear to be a Spotify track URI.",
-        confirmLabel: "OK"
+
+// Handler for copying a track or playlist ID to clipboard. Validates ID format before attempting to copy, and shows console message on success or failure.
+function handleCopyID(id,type) {
+    const prefix = type === "track" ? "Track ID" : "Playlist ID";
+
+    navigator.clipboard.writeText(id).then(() => {
+        console.log(`${prefix} ${id} copied to clipboard.`);
+    }).catch(err => {
+        console.error(`Failed to copy ${prefix.toLowerCase()}:`, err);
     });
 }
 
-function handleCopyTrackID(trackID) {
-    navigator.clipboard.writeText(trackID).then(() => {
-        console.log(`Track ID ${trackID} copied to clipboard.`);
-    }).catch(err => {
-        console.error("Failed to copy track ID:", err);
-    });
+
+// Universal handler for opening Spotify URIs. 
+// Supports both track and playlist URIs, validating format and providing user feedback on errors. 
+// Attempts to open in Spotify app first, with a fallback to the web player if that fails
+function handleOpenSpotifyURI(uri){
+    
+    // Base URL, appended with type-specific path and ID to build web fallback link if needed.
+    let webURL = "https://open.spotify.com/"
+
+    //Build link based on URI type, warning user if format is unexpected.
+    if (uri.includes("spotify:playlist:")) {
+        webURL += `playlist/${uri.split(":").pop()}`;
+    } 
+    else if (uri.includes("spotify:track:")) {
+        webURL += `track/${uri.split(":").pop()}`;
+    }
+    else {
+        notifyModal({
+            title: "Cannot Open in Spotify",
+            message: "URI does not appear to be a valid Spotify URI.",
+            confirmLabel: "OK"
+        });
+        return;
+    }
+
+    // try to open with URI, fall back to web link in new tab afterward
+    window.location.href = uri; //Open directly in window, links right to app if available
+    
+    //Start a fallback timer
+    const start = Date.now();
+    setTimeout(() => {
+        const elapsed = Date.now() - start;
+        // If the user has the Spotify app and it successfully opened, they likely won't return to the page within 2 seconds. If they do return quickly, we can assume the app didn't open and trigger the fallback.
+        if (elapsed < 1500) {
+            console.warn("Spotify URI fallback triggered after", elapsed, "ms. Opening web URL:", webURL);
+            window.open(webURL, "_blank");//Open URL new tab.
+        }
+    }, 1400);    
 }
+
+
 
 // Handler for adding existing playlists to the workspace. Fetches full library from IDB, excludes already-loaded playlists, then shows a selector modal.
 async function handleAddPlaylist() {
