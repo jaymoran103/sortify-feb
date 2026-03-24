@@ -113,7 +113,7 @@ body {
     flex-shrink: 0;
 }
 
-/* Sort Controls */
+/* Sort Controls — select styled via shared .sort-select / .sort-select-wrapper in components.css */
 #sort-controls {
     display: flex;
     align-items: center;
@@ -123,37 +123,6 @@ body {
 #sort-controls label {
     font-size: var(--font-size-controls);
     color: var(--color-text-muted);
-}
-
-#sort-controls select {
-    background-color: var(--color-row);
-    color: var(--color-text);
-    border: var(--border-standard);
-    padding: 4px 8px;
-    height: 32px;
-    cursor: pointer;
-    font-size: var(--font-size-controls);
-    border-radius: 2px;
-    appearance: none;
-    padding-right: 25px;
-}
-
-/* CSS triangle arrow for sort dropdown button*/
-.control-bar__sort-wrapper {
-    position: relative;
-    display: inline-block;
-}
-.control-bar__sort-wrapper::after {
-    content: '';
-    position: absolute;
-    right: 8px;
-    top: 50%;
-    transform: translateY(-50%);
-    width: 0;
-    height: 0;
-    border-left: 5px solid transparent;
-    border-right: 5px solid transparent;
-    border-top: 6px solid var(--color-text-muted);
 }
 
 

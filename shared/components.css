@@ -147,8 +147,18 @@ button.modal__btn--danger:hover {
     max-width: 400px;
 }
 
+/* Search + optional sort row above the list.
+   When a sort select is present both share this row.
+   When only a search input is present it fills the full row width. */
+.modal__controls-row {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+}
+
 .modal__search-input {
-    width: 100%;
+    flex: 1;          /* fills remaining space when sharing row with sort select */
+    min-width: 0;     /* prevents flex item from overflowing */
     background-color: var(--color-row-hover);
     color: var(--color-text);
     border: var(--border-standard);
@@ -254,6 +264,47 @@ button.modal__btn--danger:hover {
 }
 .modal__menu-btn--primary .modal__menu-btn-sub {
     color: rgba(255, 255, 255, 0.55);
+}
+
+
+/* ========== SORT SELECT ========== */
+
+/* Wrapper needed to mask the native arrow and draw a consistent one via ::after.
+   Use with a <select class="sort-select"> inside. */
+.sort-select-wrapper {
+    position: relative;
+    display: inline-block;
+}
+.sort-select-wrapper::after {
+    content: '';
+    position: absolute;
+    right: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 0;
+    height: 0;
+    border-left: 5px solid transparent;
+    border-right: 5px solid transparent;
+    border-top: 6px solid var(--color-text-muted);
+    pointer-events: none;
+}
+
+.sort-select {
+    background-color: var(--color-row);
+    color: var(--color-text);
+    border: var(--border-standard);
+    padding: 4px 8px;
+    padding-right: 25px; /* room for the ::after triangle */
+    height: 32px;
+    cursor: pointer;
+    font-size: var(--font-size-controls);
+    border-radius: 2px;
+    appearance: none;
+    -webkit-appearance: none;
+}
+.sort-select:focus {
+    outline: 1px solid var(--color-text-muted);
+    outline-offset: 1px;
 }
 
 

@@ -522,7 +522,8 @@ class DashboardApp {
         const selectedIds = await playlistSelectModal({
             title:        "Select Playlists",
             confirmLabel: "Open Workspace",
-            playlists
+            playlists,
+            offerSelectAll: false
         });
 
         if (!selectedIds || selectedIds.length === 0) return;

@@ -541,7 +541,7 @@ function initSortControl() {
     
     //Wrapper for label and sort dropdown, facilitates dropdown styling
     const wrapper = document.createElement("div");
-    wrapper.className = "control-bar__sort-wrapper";
+    wrapper.className = "sort-select-wrapper";
 
     //Label for sort dropdown
     const label = document.createElement("label");
@@ -551,6 +551,7 @@ function initSortControl() {
     //Actual select element
     const select = document.createElement("select");
     select.id = "sort-select";
+    select.className = "sort-select";
 
     // Define options for sorting, then create and append option elements to the select.
     const options = [
@@ -1010,7 +1011,8 @@ async function handleAddPlaylist() {
     const selectedIds = await playlistSelectModal({
         title: "Add Playlist",
         confirmLabel: "Add",
-        playlists: available
+        playlists: available,
+        offerSelectAll: false
     });
 
     //If user cancelled or made no selection, exit. 

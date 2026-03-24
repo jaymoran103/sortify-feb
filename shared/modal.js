@@ -212,16 +212,21 @@ export function warningModal({ title, message, actions = [] } = {}) {
 
 // Internal list-picker modal used by all selector variants.
 // Extend by adding a new exported wrapper that supplies getID and getCount for the item shape.
-// getCount may return null; the count column is omitted from the row in that case.
-// FUTURE: add sortSelected boolean param here to float selected items to top of returned array.
+// getCount may return null — the count column is omitted from the row in that case.
+// sortOptions: optional array of { value, label } for a sort <select> shown alongside search.
+//   When omitted the search input fills the full row width.
+// sortSelected: when true, checked rows float to the top of the list. Rows re-order on each change.
 // FUTURE: add selectAll button param here if needed, not in wrapper functions.
-function _openSelectModal({ title, 
-                            confirmLabel = "Add", 
+function _openSelectModal({ title,
+                            confirmLabel = "Add",
                             cancelLabel = "Cancel",
-                            playlists = [], 
-                            getID, 
+                            playlists = [],
+                            getID,
                             getCount,
-                            searchPlaceholder = "Search playlists\u2026" }) {
+                            searchPlaceholder = "Search playlists\u2026",
+                            sortOptions = null,
+                            sortSelected = false,
+                            offerSelectAll = true }) {
     let selectedIds = new Set();
     let noteEl;
 
@@ -251,6 +256,7 @@ function _openSelectModal({ title,
                 label.classList.remove("modal__list-row--checked");
             }
             updateState();
+            // Do not reorder on every checkbox toggle; maintain the current display ordering.
         });
 
         const nameSpan       = document.createElement("span");
@@ -270,8 +276,83 @@ function _openSelectModal({ title,
         }
 
         list.appendChild(label);
-        return { label, name: item.name.toLowerCase() };
+        return { label, item };
     }
+
+    // Reorder the displayed rows so selected (checked) rows appear first among visible rows.
+    function reorderSelectedFirst(list) {
+        if (!sortSelected) return;
+
+        const visibleRows = rows.filter(r => !r.label.hidden);
+        const hiddenRows  = rows.filter(r => r.label.hidden);
+
+        const checked   = visibleRows.filter(r => r.label.querySelector("input").checked);
+        const unchecked = visibleRows.filter(r => !r.label.querySelector("input").checked);
+
+        for (const r of [...checked, ...unchecked, ...hiddenRows]) {
+            list.appendChild(r.label);
+        }
+
+        // Keep emptyMsg at the end after re-ordering
+        list.appendChild(emptyMsg);
+    }
+
+    // Sort the source playlists array by the given criteria and re-render the list.
+    // Rows are rebuilt in the new order; existing DOM nodes are replaced.
+    // FUTURE: make sort options dynamic
+    function applySortAndRender(criteria, list) {
+        const sorted = [...playlists].sort((a, b) => {
+            switch (criteria) {
+                case "name":
+                    return (a.name || "").localeCompare(b.name || "");
+                case "name-desc":
+                    return (b.name || "").localeCompare(a.name || "");
+                case "last-modified":
+                    // Nulls sort last
+                    if (!a.lastModified && !b.lastModified) return 0;
+                    if (!a.lastModified) return 1;
+                    if (!b.lastModified) return -1;
+                    return new Date(b.lastModified) - new Date(a.lastModified);
+                case "track-count":
+                    return (getCount(b) ?? 0) - (getCount(a) ?? 0);
+                default:
+                    return 0;
+            }
+        });
+
+        // Clear existing rows and rebuild in sorted order.
+        rows.length = 0;
+        while (list.firstChild) list.removeChild(list.firstChild);
+        for (const item of sorted) {
+            rows.push(buildRow(item, list));
+        }
+        list.appendChild(emptyMsg);
+
+        // Re-apply current search query visibility after re-ordering.
+        const query = currentQuery();
+        for (const { label, item } of rows) {
+            label.hidden = !!query && !(item.name || "").toLowerCase().includes(query);
+        }
+
+        // Restore checked state from selectedIds.
+        for (const { label, item } of rows) {
+            const id = getID(item);
+            const checkbox = label.querySelector("input");
+            const isChecked = selectedIds.has(id);
+            checkbox.checked = isChecked;
+            label.classList.toggle("modal__list-row--checked", isChecked);
+        }
+
+        // When requested, keep selected rows at the top of displayed rows.
+        reorderSelectedFirst(list);
+    }
+
+    // rows is declared here so reorderRows and applySortAndRender can reference it.
+    const rows = [];
+    // currentQuery is a closure so search and sort can share the current filter state.
+    let _currentQuery = "";
+    const currentQuery = () => _currentQuery;
+    let emptyMsg; // declared here so reorderRows can reference it
 
     return _modal.open({
         title,
@@ -282,43 +363,100 @@ function _openSelectModal({ title,
             // Add list modifier class to the modal element
             _modal._overlay.firstElementChild.classList.add("modal--list");
 
+            // Controls row: search input + optional sort select share one horizontal line.
+            const controlsRow     = document.createElement("div");
+            controlsRow.className = "modal__controls-row";
+
             // Search input
             const searchInput       = document.createElement("input");
             searchInput.type        = "text";
             searchInput.className   = "modal__search-input";
             searchInput.placeholder = searchPlaceholder;
 
+            controlsRow.appendChild(searchInput);
+
+            // Optional sort select — only rendered when sortOptions are provided.
+            if (sortOptions && sortOptions.length > 0) {
+                const sortWrapper     = document.createElement("div");
+                sortWrapper.className = "sort-select-wrapper";
+
+                const sortSelect     = document.createElement("select");
+                sortSelect.className = "sort-select";
+
+                for (const opt of sortOptions) {
+                    const o       = document.createElement("option");
+                    o.value       = opt.value;
+                    o.textContent = opt.label;
+                    sortSelect.appendChild(o);
+                }
+
+                sortSelect.addEventListener("change", () => {
+                    applySortAndRender(sortSelect.value, list);
+                });
+
+                sortWrapper.appendChild(sortSelect);
+                controlsRow.appendChild(sortWrapper);
+            }
+
             // Scrollable list
             const list     = document.createElement("div");
             list.className = "modal__list";
 
-            const emptyMsg       = document.createElement("p");
-            emptyMsg.className   = "modal__list-empty";
+            emptyMsg           = document.createElement("p");
+            emptyMsg.className = "modal__list-empty";
             emptyMsg.textContent = "No results match your search.";
-            emptyMsg.hidden      = true;
+            emptyMsg.hidden    = true;
 
-            // One row per item
-            const rows = playlists.map(item => buildRow(item, list));
+            // One row per item — populate rows array in place (shared with sort/reorder helpers).
+            for (const item of playlists) {
+                rows.push(buildRow(item, list));
+            }
             list.appendChild(emptyMsg);
+
+            // On initial render, selected-first ordering is applied when requested.
+            reorderSelectedFirst(list);
 
             // Filter rows on search input
             searchInput.addEventListener("input", () => {
-                const query = searchInput.value.trim().toLowerCase();
+                _currentQuery = searchInput.value.trim().toLowerCase();
                 let visibleCount = 0;
-                for (const { label, name } of rows) {
-                    const match = !query || name.includes(query);
+                for (const { label, item } of rows) {
+                    const match = !_currentQuery || (item.name || "").toLowerCase().includes(_currentQuery);
                     label.hidden = !match;
                     if (match) visibleCount++;
                 }
                 emptyMsg.hidden = visibleCount > 0;
+                reorderSelectedFirst(list);
             });
 
-            container.appendChild(searchInput);
+            container.appendChild(controlsRow);
             container.appendChild(list);
 
             // Inject "N selected" counter into footer, left of buttons
             const old = _modal._footerEl.querySelector(".modal__footer-note");
             if (old) old.remove();
+
+            // optional "Select All" button to check all boxes and update state accordingly. Only shown when offerSelectAll is true.
+            if (offerSelectAll) {
+                const selectAllBtn = document.createElement("button");
+                selectAllBtn.type = "button";
+                selectAllBtn.className = "modal__btn--cancel";
+                selectAllBtn.textContent = "Select All";
+                selectAllBtn.addEventListener("click", () => {
+                    for (const row of rows) {
+                        if (row.label.hidden) continue; // skip hidden rows
+                        const id = getID(row.item);
+                        selectedIds.add(id);
+                        const checkbox = row.label.querySelector("input");
+                        checkbox.checked = true;
+                        row.label.classList.add("modal__list-row--checked");
+                    }
+                    updateState();
+                    reorderSelectedFirst(list);
+                });
+                _modal._footerEl.prepend(selectAllBtn);
+            }
+
             noteEl           = document.createElement("span");
             noteEl.className = "modal__footer-note";
             _modal._footerEl.prepend(noteEl);
@@ -334,15 +472,25 @@ function _openSelectModal({ title,
 }
 
 
+// Sort options offered in the playlist selector. Separate constant so callers can extend if needed.
+const PLAYLIST_SORT_OPTIONS = [
+    { value: "name",          label: "Name A–Z" },
+    { value: "name-desc",     label: "Name Z–A" },
+    { value: "last-modified", label: "Last Modified" },
+    { value: "track-count",   label: "Track Count" },
+];
+
 // Playlist selector modal — local IDB playlists.
-// playlists: array of { id, name, trackIDs }
+// playlists: array of { id, name, trackIDs, lastModified? }
 // Returns an array of selected IDB ids, or null if cancelled/dismissed.
 // TODO: decide whether to pre-filter already-loaded playlists at the call site or show all with a note.
 export function playlistSelectModal({ title = "Select Playlists", confirmLabel = "Add", cancelLabel = "Cancel", playlists = [] } = {}) {
     return _openSelectModal({
         title, confirmLabel, cancelLabel, playlists,
-        getID:    pl => pl.id,
-        getCount: pl => pl.trackIDs?.length ?? 0,
+        getID:       pl => pl.id,
+        getCount:    pl => pl.trackIDs?.length ?? 0,
+        sortOptions: PLAYLIST_SORT_OPTIONS,
+        sortSelected: true,
     });
 }
 
@@ -357,11 +505,19 @@ export function spotifyPlaylistSelectModal({ title = "Select Playlists", confirm
     });
 }
 
+// Sort options for the track selector. Title/artist/album match workspace sort keys.
+const TRACK_SORT_OPTIONS = [
+    { value: "name",      label: "Title A–Z" },
+    { value: "name-desc", label: "Title Z–A" },
+    // FUTURE: add artist/album once _openSelectModal sort cases handle non-name fields on track objects.
+    // In that case extend applySortAndRender with a getField accessor, similar to getID/getCount.
+];
+
 // FUTURE: Track selector modal — local IDB tracks.
 // tracks: array of { trackID, title, artist, album }
 // Returns an array of selected trackIDs, or null if cancelled/dismissed.
-// FUTURE: pass sortSelected: true once that param is added to _openSelectModal, to float chosen tracks to top.
 export function trackSelectModal({ title = "Select Tracks", confirmLabel = "Add", cancelLabel = "Cancel", tracks = [] } = {}) {
+    // Stub — not yet wired. Replace this block when implementing the Add Tracks feature.
     console.warn("trackSelectModal not yet implemented.");
     return Promise.resolve(null);
     // return _openSelectModal({
@@ -370,6 +526,8 @@ export function trackSelectModal({ title = "Select Tracks", confirmLabel = "Add"
     //     getID:              t => t.trackID,
     //     getCount:           () => null,             // no count column for tracks
     //     searchPlaceholder: "Search tracks\u2026",
+    //     sortOptions:        TRACK_SORT_OPTIONS,
+    //     sortSelected:       true,
     // });
 }
 
