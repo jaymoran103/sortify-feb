@@ -15,6 +15,7 @@ button {
     height: 32px;
     vertical-align: middle;
     font-size: var(--font-size-button);
+    /* max-width: 300px; */
 }
 button:disabled {
     background-color: var(--color-disabled);
@@ -387,4 +388,19 @@ button.modal__btn--danger:hover {
 }
 .dropdown__trigger:hover:not(:disabled)::after {
     border-top-color: var(--color-text);
+}
+
+/* Ellipsis trigger style: alternative to triangle for compact action menus */
+.dropdown__trigger--ellipsis {
+    font-weight: 700;
+    font-size: 1.1rem;
+    padding: 2px;
+    width: 30px;
+    height: 30px;
+    line-height: 1;
+    text-align: center;
+    border: var(--border-standard); /* This one wants a dark border to match library controls - FUTURE define elsewhere?*/
+}
+.dropdown__trigger--ellipsis::after {
+    content: none;
 }

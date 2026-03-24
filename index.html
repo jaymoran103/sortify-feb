@@ -41,13 +41,24 @@
 
                 <!-- Control bar -->
                 <div class="card-controlbar">
+
+                    <!-- Control Bar: Category Control -->
                     <div class="sort-select-wrapper" style="margin-right:auto;">
                         <select id="library-view-select" class="sort-select">
                             <option value="playlists">Playlists</option>
                             <option value="tracks">Tracks</option>
                         </select>
                     </div>
-                    <button id="library-actions-btn" class="dropdown__trigger" aria-label="Library actions"></button>
+
+                    <input id="library-search-input" class="modal__search-input" placeholder="Search playlists…" />
+
+                    <!-- Control Bar: Sort control -->
+                    <div class="sort-select-wrapper">
+                        <select id="library-sort-select" class="sort-select"></select>
+                    </div>
+
+                    <!-- Control Bar: Actions Dropdown -->
+                    <button id="library-actions-btn" class="dropdown__trigger dropdown__trigger--ellipsis" aria-label="Library actions">⋮</button>
                 </div>
 
                 <!-- Playlist display, populated by app.js on init -->
@@ -55,7 +66,7 @@
 
                 <!-- Stats display, populated by renderLibrary()  -->
                 <div class="library-stats" id="library-stats" aria-live="polite" aria-atomic="true" hidden></div>
-                
+
 
                 <!-- <div class="card-footer"></div> -->
 

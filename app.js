@@ -12,6 +12,7 @@ import spotifyImportAdapter from "./shared/adapters/spotifyImportAdapter.js";
 import spotifyExportAdapter from "./shared/adapters/spotifyExportAdapter.js";
 
 import { menuModal, notifyModal, warningModal, playlistSelectModal, spotifyPlaylistSelectModal } from "./shared/modal.js";
+import { matchesTrackSearch, matchesPlaylistSearch, sortTrackIDs } from "./shared/trackUtils.js";
 import { dropdownMenu } from "./shared/dropdown.js";
 
 class DashboardApp {
@@ -19,6 +20,8 @@ class DashboardApp {
     constructor() {
         this.dataManager = new DataManager();
         this.libraryView = "playlists"; // "playlists" | "tracks"
+        this.librarySearchQuery = "";
+        this.librarySortCriteria = "name";
 
         this.dataManager.init().then(async () => {
             console.log("Database initialized");
@@ -66,8 +69,26 @@ class DashboardApp {
 
         document.getElementById("library-view-select").addEventListener("change", (e) => {
             this.libraryView = e.target.value;
+            // reset to the default sort for the chosen view and keep search query ongoing so users can step between views.
+            this.librarySortCriteria = this.libraryView === "tracks" ? "title" : "name";
             this.renderLibrary();
         });
+
+        const searchInput = document.getElementById("library-search-input");
+        if (searchInput) {
+            searchInput.addEventListener("input", (e) => {
+                this.librarySearchQuery = e.target.value.trim();
+                this.renderLibrary();
+            });
+        }
+
+        const sortSelect = document.getElementById("library-sort-select");
+        if (sortSelect) {
+            sortSelect.addEventListener("change", (e) => {
+                this.librarySortCriteria = e.target.value;
+                this.renderLibrary();
+            });
+        }
     }
 
     // ====== I/O CARD ==========================================
@@ -394,10 +415,16 @@ class DashboardApp {
                     <span class="library-stats-value">${playlists.length}</span>
                     <span class="library-stats-label">playlists</span>
                 </div>
+                                
+                <div class="library-stats-sep"> | </div>
+
                 <div class="library-stats-item">
                     <span class="library-stats-value">${totalTracks}</span>
                     <span class="library-stats-label">tracks</span>
                 </div>
+                                
+                <div class="library-stats-sep"> | </div>
+
                 <div class="library-stats-item">
                     <span class="library-stats-value">${uniqueTracks}</span>
                     <span class="library-stats-label">unique</span>
@@ -405,10 +432,15 @@ class DashboardApp {
             `;
         }
 
+        // Update controls (sort options / placeholder) each render so the options reflect selected view.
+        this.renderLibraryControls();
+
         if (this.libraryView === "tracks") {
-            this._renderLibraryTracks(tracks, container);
+            const filteredTracks = this.filterAndSortTracks(tracks);
+            this._renderLibraryTracks(filteredTracks, container);
         } else {
-            this._renderLibraryPlaylists(playlists, container);
+            const filteredPlaylists = this.filterAndSortPlaylists(playlists);
+            this._renderLibraryPlaylists(filteredPlaylists, container);
         }
     }
 
@@ -498,12 +530,104 @@ class DashboardApp {
         });
     }
 
-    //TODO move definition elsewhere
+        //TODO move definitions elsewhere
+        // Helper method returns library sort options depending on current library view.
+        getLibrarySortOptions() {
+
+        // track view
+        if (this.libraryView === "tracks") {
+            return [
+                { value: "title", label: "Title" },
+                { value: "artist", label: "Artist" },
+                { value: "album", label: "Album" },
+            ];
+        }
+
+        // playlist view
+        return [
+            { value: "last-modified", label: "Recent" },
+            { value: "name", label: "Name" },
+            { value: "track-count", label: "Size" },
+        ];
+    }
+
+    renderLibraryControls() {
+        const searchInput = document.getElementById("library-search-input");
+        const sortSelect  = document.getElementById("library-sort-select");
+
+        if (searchInput) {
+            searchInput.placeholder = this.libraryView === "tracks" ? "Search tracks…" : "Search playlists…";
+            searchInput.value = this.librarySearchQuery;
+        }
+
+        if (!sortSelect) return;
+
+        const options = this.getLibrarySortOptions();
+        sortSelect.innerHTML = "";
+
+        for (const option of options) {
+            const opt = document.createElement("option");
+            opt.value = option.value;
+            opt.textContent = option.label;
+            sortSelect.appendChild(opt);
+        }
+
+        if (!options.some((opt) => opt.value === this.librarySortCriteria)) {
+            this.librarySortCriteria = options[0].value;
+        }
+
+        sortSelect.value = this.librarySortCriteria;
+    }
+
     getLibraryControlMenuItems() {
         return [
             { label: "Delete Playlists", action: async () => { await this.handleDeletePlaylists(); }},
             { label: "Clear Storage", action: async () => { await this.handleClearStorage(); }},
         ];
+    }
+
+    filterAndSortPlaylists(playlists) {
+        const query = this.librarySearchQuery.toLowerCase();
+
+        let results = playlists.filter((pl) => matchesPlaylistSearch(pl, query));
+
+        switch (this.librarySortCriteria) {
+            case "track-count":
+                results = [...results].sort((a, b) => (b.trackIDs?.length || 0) - (a.trackIDs?.length || 0));
+                break;
+            case "last-modified":
+                results = [...results].sort((a, b) => {
+                    const aDate = a.lastModified ? new Date(a.lastModified).getTime() : 0;
+                    const bDate = b.lastModified ? new Date(b.lastModified).getTime() : 0;
+                    return bDate - aDate;
+                });
+                break;
+            case "name":
+            default:
+                results = [...results].sort((a, b) => (a.name || "").localeCompare(b.name || ""));
+        }
+
+        return results;
+    }
+
+    filterAndSortTracks(tracks) {
+        const query = this.librarySearchQuery.toLowerCase();
+
+        let results = tracks.filter((track) => matchesTrackSearch(track, query));
+
+        switch (this.librarySortCriteria) {
+            case "artist":
+                results = [...results].sort((a, b) => (a.artist || "").localeCompare(b.artist || ""));
+                break;
+            case "album":
+                results = [...results].sort((a, b) => (a.album || "").localeCompare(b.album || ""));
+                break;
+            case "title":
+            default:
+                results = [...results].sort((a, b) => (a.title || "").localeCompare(b.title || ""));
+        }
+
+        return results;
     }
 
 

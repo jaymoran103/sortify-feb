@@ -491,9 +491,10 @@ function _openSelectModal({ title,
 
 
 // Sort options offered in the playlist selector. Separate constant so callers can extend if needed.
+//FUTURE: extract all such methods to a dedicated config/util file when refactoring, rather than defining as needed in component files
 const PLAYLIST_SORT_OPTIONS = [
-    { value: "name",          label: "Name A–Z" },
-    { value: "name-desc",     label: "Name Z–A" },
+    { value: "name",          label: "Name" },
+    // { value: "name-desc",     label: "Name" },
     { value: "last-modified", label: "Last Modified" },
     { value: "track-count",   label: "Track Count" },
 ];
