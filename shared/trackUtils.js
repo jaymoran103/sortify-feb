@@ -22,6 +22,26 @@ export function filterTrackIDs(trackIDs, query, trackMap) {
     });
 }
 
+// Returns true if a track matches the lowercase query on title, artist, or album.
+export function matchesTrackSearch(track, query) {
+    if (!query) return true;
+    const haystack = [track.title, track.artist, track.album]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+    return haystack.includes(query);
+}
+
+// Returns true if a playlist matches the lowercase query on name or lastModified
+export function matchesPlaylistSearch(playlist, query) {
+    if (!query) return true;
+    const haystack = [playlist.name, playlist.lastModified?.toString()]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+    return haystack.includes(query);
+}
+
 // Returns sorted array of trackIDs for the given criteria.
 // trackMap: { [trackID]: trackObject }
 // playlists: session playlist array — needed for "most-playlists" and "playlist:X" modes.

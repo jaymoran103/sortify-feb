@@ -1,5 +1,5 @@
 import WorkspaceSession from "./session.js";
-import { promptModal, notifyModal, playlistSelectModal, warningModal } from "../shared/modal.js";
+import { promptModal, notifyModal, playlistSelectModal, trackSelectModal, warningModal, menuModal } from "../shared/modal.js";
 import { filterTrackIDs, sortTrackIDs } from "../shared/trackUtils.js";
 import { dropdownMenu } from "../shared/dropdown.js";
 
@@ -156,9 +156,8 @@ function setupEventListeners() {
     backBtn.onclick = null; // clear the existing onclick listener, ensuring use of this button after the page renders will use the proper handleBackButton() method, subject to checks and save warnings before returning to the dashboard.
     backBtn.addEventListener("click", handleBackButton);
     
-    // Playlist management buttons
-    document.getElementById("add-playlist-btn").addEventListener("click", handleAddPlaylist);
-    document.getElementById("new-playlist-btn").addEventListener("click", handleCreateEmptyPlaylist);
+    // Playlist management button (single entrypoint)
+    document.getElementById("add-workspace-btn").addEventListener("click", handleAddToWorkspace);
 
     // For any checkbox change in the table body, handle toggle with reference to the event target
     document.getElementById("table-body").addEventListener("change", (e) => {
@@ -1046,6 +1045,77 @@ async function handleCreateEmptyPlaylist() {
     session.createEmptyPlaylist(name);
 
     refreshWorkspace();
+}
+
+// Add selected tracks from library to workspace.
+// In the absence of an existing playlist, a new one is created to hold the imported tracks.
+async function handleAddTrackToWorkspace() {
+    const allTracks = await session.dataManager.getAllRecords("tracks");
+    if (!allTracks || allTracks.length === 0) {
+        await notifyModal({ title: "No Tracks Available", message: "No tracks are available in library to add to workspace." });
+        return;
+    }
+
+    const candidateTracks = allTracks.filter(track => !tracks[track.trackID]);
+    if (candidateTracks.length === 0) {
+        await notifyModal({ title: "No New Tracks", message: "All available tracks are already present in the workspace." });
+        return;
+    }
+
+    const selectedTrackIDs = await trackSelectModal({
+        title: "Add Tracks",
+        confirmLabel: "Add",
+        cancelLabel: "Cancel",
+        tracks: candidateTracks
+    });
+    if (!selectedTrackIDs || selectedTrackIDs.length === 0) return;
+
+    // Ensure the selected tracks are loaded into session cache
+    const selectedMap = new Map(candidateTracks.map(t => [t.trackID, t]));
+    for (const trackID of selectedTrackIDs) {
+        const track = selectedMap.get(trackID);
+        if (track) tracks[trackID] = track;
+    }
+
+    // Add tracks to first playlist in workspace (or create a new one if none exist)
+    let destination = playlists[0];
+    if (!destination) {
+        destination = session.createEmptyPlaylist("Imported Tracks");
+        playlists.push(destination);
+    }
+
+    for (const trackID of selectedTrackIDs) {
+        if (!destination.trackIDSet.has(trackID)) {
+            destination.trackIDs.push(trackID);
+            destination.trackIDSet.add(trackID);
+            session.modifiedPlaylists.add(destination.playlistID);
+        }
+        if (!stableOrder.includes(trackID)) {
+            stableOrder.push(trackID);
+        }
+    }
+
+    refreshWorkspace();
+}
+
+async function handleAddToWorkspace() {
+    const action = await menuModal({
+        title: "Add to Workspace",
+        choices: [
+            { label: "Add existing playlist", value: "add-playlist" },
+            { label: "Create new playlist", value: "new-playlist" },
+            { label: "Add tracks", value: "add-track" }
+        ],
+        cancelLabel: "Cancel"
+    });
+
+    if (action === "add-playlist") {
+        await handleAddPlaylist();
+    } else if (action === "new-playlist") {
+        await handleCreateEmptyPlaylist();
+    } else if (action === "add-track") {
+        await handleAddTrackToWorkspace();
+    }
 }
 
 

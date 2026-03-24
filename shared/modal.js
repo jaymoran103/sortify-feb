@@ -1,3 +1,5 @@
+import { matchesTrackSearch, matchesPlaylistSearch } from "./trackUtils.js";
+
 // Lightweight modal controller. One modal open at a time.
 // DOM shell is built once on import and persists in the body; visibility toggled via modal-overlay--visible.
 
@@ -226,7 +228,8 @@ function _openSelectModal({ title,
                             searchPlaceholder = "Search playlists\u2026",
                             sortOptions = null,
                             sortSelected = false,
-                            offerSelectAll = true }) {
+                            offerSelectAll = true,
+                            searchMatcher = (item, query) => (item.name || "").toLowerCase().includes(query) }) {
     let selectedIds = new Set();
     let noteEl;
 
@@ -305,8 +308,12 @@ function _openSelectModal({ title,
             switch (criteria) {
                 case "name":
                     return (a.name || "").localeCompare(b.name || "");
-                case "name-desc":
-                    return (b.name || "").localeCompare(a.name || "");
+                case "title":
+                    return (a.title || "").localeCompare(b.title || "");
+                case "artist":
+                    return (a.artist || "").localeCompare(b.artist || "");
+                case "album":
+                    return (a.album || "").localeCompare(b.album || "");
                 case "last-modified":
                     // Nulls sort last
                     if (!a.lastModified && !b.lastModified) return 0;
@@ -331,7 +338,7 @@ function _openSelectModal({ title,
         // Re-apply current search query visibility after re-ordering.
         const query = currentQuery();
         for (const { label, item } of rows) {
-            label.hidden = !!query && !(item.name || "").toLowerCase().includes(query);
+            label.hidden = !!query && !searchMatcher(item, query);
         }
 
         // Restore checked state from selectedIds.
@@ -421,7 +428,7 @@ function _openSelectModal({ title,
                 _currentQuery = searchInput.value.trim().toLowerCase();
                 let visibleCount = 0;
                 for (const { label, item } of rows) {
-                    const match = !_currentQuery || (item.name || "").toLowerCase().includes(_currentQuery);
+                    const match = !_currentQuery || searchMatcher(item, _currentQuery);
                     label.hidden = !match;
                     if (match) visibleCount++;
                 }
@@ -471,11 +478,9 @@ function _openSelectModal({ title,
     });
 }
 
-
 // Sort options offered in the playlist selector. Separate constant so callers can extend if needed.
 const PLAYLIST_SORT_OPTIONS = [
-    { value: "name",          label: "Name A–Z" },
-    { value: "name-desc",     label: "Name Z–A" },
+    { value: "name",          label: "Playlist Name" },
     { value: "last-modified", label: "Last Modified" },
     { value: "track-count",   label: "Track Count" },
 ];
@@ -487,10 +492,11 @@ const PLAYLIST_SORT_OPTIONS = [
 export function playlistSelectModal({ title = "Select Playlists", confirmLabel = "Add", cancelLabel = "Cancel", playlists = [] } = {}) {
     return _openSelectModal({
         title, confirmLabel, cancelLabel, playlists,
-        getID:       pl => pl.id,
-        getCount:    pl => pl.trackIDs?.length ?? 0,
-        sortOptions: PLAYLIST_SORT_OPTIONS,
-        sortSelected: true,
+        getID:         pl => pl.id,
+        getCount:      pl => pl.trackIDs?.length ?? 0,
+        searchMatcher: matchesPlaylistSearch,
+        sortOptions:   PLAYLIST_SORT_OPTIONS,
+        sortSelected:  true,
     });
 }
 
@@ -507,28 +513,36 @@ export function spotifyPlaylistSelectModal({ title = "Select Playlists", confirm
 
 // Sort options for the track selector. Title/artist/album match workspace sort keys.
 const TRACK_SORT_OPTIONS = [
-    { value: "name",      label: "Title A–Z" },
-    { value: "name-desc", label: "Title Z–A" },
-    // FUTURE: add artist/album once _openSelectModal sort cases handle non-name fields on track objects.
-    // In that case extend applySortAndRender with a getField accessor, similar to getID/getCount.
+    { value: "title",  label: "Title" },
+    { value: "artist", label: "Artist" },
+    { value: "album",  label: "Album" },
 ];
 
-// FUTURE: Track selector modal — local IDB tracks.
-// tracks: array of { trackID, title, artist, album }
+// NOTE: no direction options (ascending only) as requested.
+
+// Track selector modal — local tracks.
+// tracks: array of { trackID, title, artist, album, ... }
 // Returns an array of selected trackIDs, or null if cancelled/dismissed.
 export function trackSelectModal({ title = "Select Tracks", confirmLabel = "Add", cancelLabel = "Cancel", tracks = [] } = {}) {
-    // Stub — not yet wired. Replace this block when implementing the Add Tracks feature.
-    console.warn("trackSelectModal not yet implemented.");
-    return Promise.resolve(null);
-    // return _openSelectModal({
-    //     title, confirmLabel, cancelLabel,
-    //     playlists: tracks,                          // _openSelectModal uses 'playlists' param name internally
-    //     getID:              t => t.trackID,
-    //     getCount:           () => null,             // no count column for tracks
-    //     searchPlaceholder: "Search tracks\u2026",
-    //     sortOptions:        TRACK_SORT_OPTIONS,
-    //     sortSelected:       true,
-    // });
+    // Make a lightweight display name combining title and artist for filtering.
+    const displayItems = tracks.map((t) => ({
+        ...t,
+        name: t.title ? `${t.title}${t.artist ? ` — ${t.artist}` : ""}` : t.trackID
+    }));
+
+    return _openSelectModal({
+        title,
+        confirmLabel,
+        cancelLabel,
+        playlists: displayItems,
+        getID: (t) => t.trackID,
+        getCount: () => null,
+        searchPlaceholder: "Search tracks\u2026",
+        searchMatcher: matchesTrackSearch,
+        sortOptions: TRACK_SORT_OPTIONS,
+        sortSelected: true,
+        offerSelectAll: true
+    });
 }
 
 
