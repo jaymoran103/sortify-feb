@@ -185,7 +185,7 @@ body {
 
 #workspace-table {
     border-collapse: collapse;
-    width: 100%;
+    width: auto;
     table-layout: fixed;
     user-select: none; /* prevent text selection on shift-click / Cmd+A */
 }
@@ -232,8 +232,8 @@ body {
 /* ========== TABLE COLUMNS ========== */
 
 .track-table__index {
-    width: 35px;
-    max-width: 40px;
+    width: 75px; /* Should be consistent with TRACK_INDEX_WIDTH in workspace.js */
+    max-width: 75px;
     text-align: center;
     white-space: nowrap;
 }
@@ -241,8 +241,9 @@ body {
 /* Track Info Column */
 .track-table__info {
     text-align: left;
-    min-width: 220px;
-    width: 220px;
+    width: var(--track-info-width, 220px);
+    min-width: var(--track-info-width, 220px);
+    max-width: var(--track-info-width, 220px);
     overflow: hidden;
 }
 
@@ -270,7 +271,9 @@ body {
 /* Playlist Columns */
 .track-table__checkbox {
     font-size: var(--font-size-base);
-    width: 100px;
+    width: var(--playlist-col-width, 100px); /* overridden at runtime via table style property */
+    min-width: 50px; /* Should be consistent with PLAYLIST_COLUMN_MIN in workspace.js */
+    max-width: 500px; /* Should be consistent with PLAYLIST_COLUMN_MAX in workspace.js */
     text-align: center;
     white-space: normal;
     word-break: break-word;

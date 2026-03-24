@@ -173,6 +173,8 @@ body {
     font-size: var(--font-size-controls);
 }
 
+
+
 /* ========== WORKSPACE CARD ========== */
 
 .ws-body {
@@ -184,6 +186,7 @@ body {
 }
 
 /* Shared card footer — sits below the scrollable content area */
+.card-controlbar, /* hack to copy styling to control bar*/
 .card-footer {
     display: flex;
     gap: 8px;

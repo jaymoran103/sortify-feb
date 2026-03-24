@@ -26,6 +26,17 @@ let currentSort = "order-added"; // Sort state for table rendering. "order-added
 let stableOrder = [];           // Array of all trackIDs in first-seen order, used as the unchanging base for all display ordering. Set once at load, updated only when tracks are added/removed from the workspace, or playlist display order changes.
 let cachedFilteredIDs = null;   // Array representing a filtered subset of stableOrder for the current filter. Reset when filter changes or track set changes.
 
+// Column width: stored to apply consistent widths across renders, and allow user resizing.
+const TRACK_INDEX_WIDTH = 75;
+const TRACK_INFO_DEFAULT = 220;
+const TRACK_INFO_MIN = 140;
+const TRACK_INFO_MAX = 440;
+const PLAYLIST_COLUMN_MIN = 50;
+const PLAYLIST_COLUMN_MAX = 500;
+
+let playlistColumnMode = "auto"; // "auto" determines width based on container and playlist count; "manual" uses playlistColumnWidth
+let playlistColumnWidth = 50;  // px — applied as CSS variable on the table element, consumed by .track-table__checkbox
+
 // Selection state: stored trackID(s) of currently selected row(s), and index of last clicked row for shift-click range selection.
 let selectedTrackIDs = new Set();
 let lastClickedTrackIndex = null;
@@ -193,6 +204,17 @@ function setupEventListeners() {
             handleCmdA();
         }
     });
+
+    // Responsive playlist column width: adjust on resize in auto mode.
+    let resizeTimer;
+    window.addEventListener("resize", () => {
+        clearTimeout(resizeTimer);
+        resizeTimer = setTimeout(() => {
+            if (playlistColumnMode === "auto") {
+                applyPlaylistColumnWidth();
+            }
+        }, 100);
+    });
 }
 
 /** ==================
@@ -289,6 +311,9 @@ function renderTableHeader(){
 
     //Append to header
     thead.appendChild(row);
+
+    // Apply current column width (th cells are recreated each render, so var must be re-set)
+    applyPlaylistColumnWidth();
 }
 
 // Renders body of workspace table.
@@ -780,6 +805,94 @@ function handleMovePlaylist(playlistID, direction) {
 }
 
 
+//Using modal, prompt for a new playlist column width and persist it as the module-level state.
+async function handleSetColumnWidth() {
+    const result = await promptModal({
+        title: "Resize Columns",
+        message: `Enter a new width between ${PLAYLIST_COLUMN_MIN} and ${PLAYLIST_COLUMN_MAX} pixels.`,
+        placeholder: playlistColumnWidth.toString(),
+        validate: (input) => {
+            const n = parseInt(input, 10);
+            if (isNaN(n) || n < PLAYLIST_COLUMN_MIN || n > PLAYLIST_COLUMN_MAX) {
+                return `Please enter a number between ${PLAYLIST_COLUMN_MIN} and ${PLAYLIST_COLUMN_MAX}.`;
+            }
+            return null;
+        }
+    });
+    if (result !== null) {
+        playlistColumnMode = "manual";
+        playlistColumnWidth = parseInt(result, 10);
+        applyPlaylistColumnWidth();
+    }
+}
+
+function handleAutoFitColumnWidth() {
+    playlistColumnMode = "auto";
+    applyPlaylistColumnWidth();
+}
+
+function computeAutoPlaylistWidth() {
+    const tableContainer = document.getElementById("workspace-container");
+    const containerWidth = tableContainer ? tableContainer.clientWidth : 0;
+
+    // If table columns already exist in DOM, measure their actual rendered width
+    // (table-layout: fixed may still include cell borders, padding, etc.).
+    const indexCell = document.querySelector('#workspace-table th.track-table__index');
+    const infoCell = document.querySelector('#workspace-table th.track-table__info');
+
+    const indexWidth = indexCell ? indexCell.getBoundingClientRect().width : TRACK_INDEX_WIDTH;
+    const infoWidth = infoCell ? infoCell.getBoundingClientRect().width : TRACK_INFO_DEFAULT;
+
+    const borderAndPadding = 16; // fallback “waste” for padding/margins/borders (should be small)
+    const available = Math.max(0, containerWidth - indexWidth - infoWidth - borderAndPadding);
+    const playlistCount = Math.max(1, playlists.length);
+    const target = Math.floor(available / playlistCount);
+
+    return Math.max(PLAYLIST_COLUMN_MIN, Math.min(target, PLAYLIST_COLUMN_MAX));
+}
+
+// Push current playlist column width to the CSS custom property on the table element.
+// If in auto mode, the width is computed from current container and playlist count.
+function computeTrackInfoWidth(playlistColumnWidth) {
+    const tableContainer = document.getElementById("workspace-container");
+    const containerWidth = tableContainer ? tableContainer.clientWidth : 0;
+    const occupied = TRACK_INDEX_WIDTH + (playlists.length * playlistColumnWidth) + 16; // table padding/borders fudge
+    const remaining = Math.max(0, containerWidth - occupied);
+    return Math.max(TRACK_INFO_MIN, Math.min(remaining, TRACK_INFO_MAX));
+}
+
+function applyPlaylistColumnWidth() {
+    const width = playlistColumnMode === "auto" ? computeAutoPlaylistWidth() : playlistColumnWidth;
+    const trackInfoWidth = computeTrackInfoWidth(width);
+
+    const table = document.getElementById('workspace-table');
+    if (!table) return;
+
+    // Apply uniform width to all playlist columns and track info via CSS variables.
+    table.style.setProperty('--playlist-col-width', width + 'px');
+    table.style.setProperty('--track-info-width', trackInfoWidth + 'px');
+    table.style.width = "auto"; // Let the table overflow horizontally if needed
+
+    // Keep the table's minimum consistent with the target widths so columns don't automatically redistribute.
+    const totalWidth = TRACK_INDEX_WIDTH + trackInfoWidth + (playlists.length * width);
+    table.style.minWidth = `${totalWidth}px`;
+
+    // Force existing playlist columns to uniform width.
+    document.querySelectorAll('#workspace-table .track-table__checkbox').forEach(cell => {
+        cell.style.width = `${width}px`;
+        cell.style.minWidth = `${width}px`;
+        cell.style.maxWidth = `${width}px`;
+    });
+
+    // Force track info header and cells to computed width.
+    document.querySelectorAll('#workspace-table th.track-table__info, #workspace-table td.track-table__info').forEach(cell => {
+        cell.style.width = `${trackInfoWidth}px`;
+        cell.style.minWidth = `${TRACK_INFO_MIN}px`;
+        cell.style.maxWidth = `${TRACK_INFO_MAX}px`;
+    });
+}
+
+
 // Returns items array [{ label, action } | { divider: true }] for the given dropdown mode.
 // Handles "track" -> "track-multi" upgrade and empty-selection guard internally.
 function buildDropdownItems(mode, id) {
@@ -799,15 +912,21 @@ function buildDropdownItems(mode, id) {
         case "playlist": {
             const playlistID = id;
 
+            const idx     = playlists.findIndex(p => p.playlistID === playlistID);
+            const atLeft  = idx === 0;
+            const atRight = idx === playlists.length - 1;
+
             const core_items = [
                 { label: "Select all Tracks",           action: () => handleBulkMembershipUpdate(playlistID, true) },
                 { label: "Deselect all Tracks",         action: () => handleBulkMembershipUpdate(playlistID, false) },
                 { label: "Sort by this playlist",       action: () => setSortByPlaylist(playlistID) },
-                
+
                 { divider: true },
                 { label: "Move Left",  stub: atLeft,  action: () => handleMovePlaylist(playlistID, -1) },
                 { label: "Move Right", stub: atRight, action: () => handleMovePlaylist(playlistID,  1) },
-    
+                { label: "Resize Columns",             action: () => handleSetColumnWidth() },
+                { label: "Auto-fit columns",           action: () => handleAutoFitColumnWidth() },
+
                 { divider: true },
                 { label: "Rename Playlist",             action: () => handleRenamePlaylist(playlistID) },
                 { label: "Duplicate Playlist",          action: () => handleDuplicatePlaylist(playlistID) },
