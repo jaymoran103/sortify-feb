@@ -275,6 +275,13 @@ button.modal__btn--danger:hover {
     position: relative;
     display: inline-block;
 }
+
+/* Utility placement helper for form-control rows and toolbars */
+.card-controlbar .sort-select-wrapper,
+.modal__controls-row .sort-select-wrapper {
+    margin-right: auto;
+}
+
 .sort-select-wrapper::after {
     content: '';
     position: absolute;

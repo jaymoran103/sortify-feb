@@ -189,11 +189,14 @@ body {
 .card-controlbar, /* hack to copy styling to control bar*/
 .card-footer {
     display: flex;
+    align-items: center;
     gap: 8px;
     padding: 10px 16px;
     border-top: var(--border-soft);
     flex-shrink: 0;
 }
+
+/* Library view selector uses shared sort-select styling from shared/components.css. */
 
 /* Full-width button used in workspace card */
 .btn--full {

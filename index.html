@@ -33,17 +33,33 @@
 
             <!-- Library Card: Provides simple display of available playlists -->
             <div class="card">
+
                 <div class="card-header">
                     <span class="card-title">Library</span>
                 </div>
-                <div class="library-stats" id="library-stats" aria-live="polite" aria-atomic="true" hidden></div>
-                <div class="library-list" id="library-list">
-                    <!-- Populated by app.js on init -->
-                </div>
-                <div class="card-footer">
+
+
+                <!-- Control bar -->
+                <div class="card-controlbar">
+                    <div class="sort-select-wrapper" style="margin-right:auto;">
+                        <select id="library-view-select" class="sort-select">
+                            <option value="playlists">Playlists</option>
+                            <option value="tracks">Tracks</option>
+                        </select>
+                    </div>
                     <button id="delete-playlists-btn">Delete Playlists</button>
                     <button id="clear-storage-btn">Clear Storage</button>
                 </div>
+
+                <!-- Playlist display, populated by app.js on init -->
+                <div class="library-list" id="library-list"></div>
+
+                <!-- Stats display, populated by renderLibrary()  -->
+                <div class="library-stats" id="library-stats" aria-live="polite" aria-atomic="true" hidden></div>
+                
+
+                <!-- <div class="card-footer"></div> -->
+
             </div>
 
             <!-- Workspace Card: Provides button to select playlists and open workspace -->

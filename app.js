@@ -17,6 +17,7 @@ class DashboardApp {
 
     constructor() {
         this.dataManager = new DataManager();
+        this.libraryView = "playlists"; // "playlists" | "tracks"
 
         this.dataManager.init().then(async () => {
             console.log("Database initialized");
@@ -61,6 +62,11 @@ class DashboardApp {
         document.getElementById("open-workspace-btn").addEventListener("click", this.handleOpenWorkspace.bind(this));
         document.getElementById("delete-playlists-btn").addEventListener("click", this.handleDeletePlaylists.bind(this));
         document.getElementById("clear-storage-btn").addEventListener("click", this.handleClearStorage.bind(this));
+
+        document.getElementById("library-view-select").addEventListener("change", (e) => {
+            this.libraryView = e.target.value;
+            this.renderLibrary();
+        });
     }
 
     // ====== I/O CARD ==========================================
@@ -355,8 +361,8 @@ class DashboardApp {
 
     // ====== LIBRARY CARD ==========================================
 
-    // Load all playlists from IDB and render name+count rows into #library-list.
-    // Uses a document fragment to avoid repeated reflows on large libraries.
+    // Load data from IDB and render the active library view into #library-list.
+    // View is determined by this.libraryView: "playlists" | "tracks".
     async renderLibrary() {
         const container = document.getElementById("library-list");
         const statsContainer = document.getElementById("library-stats");
@@ -365,42 +371,26 @@ class DashboardApp {
             statsContainer.hidden = true;
             statsContainer.innerHTML = "";
         }
-
         container.innerHTML = "";
 
-        let playlists;
+        // Load both stores — needed for stats regardless of view, and tracks view needs track records.
+        let playlists, tracks;
         try {
             playlists = await this.dataManager.getAllRecords("playlists");
+            tracks    = await this.dataManager.getAllRecords("tracks");
         } catch (err) {
             console.error("Failed to load library:", err);
             return;
         }
 
-        if (!playlists || playlists.length === 0) {
-            const empty       = document.createElement("p");
-            empty.className   = "library-empty";
-            empty.textContent = "No playlists yet — import some to get started.";
-            container.appendChild(empty);
-            return;
-        }
-
-        // Compute simple library statistics. FUTURE: Cache this somewhere once I/O import sequence is more established, not worth the overhead yet. 
-        const playlistCount = playlists.length;
-        const totalTracks   = playlists.reduce((sum, pl) => sum + (pl.trackIDs?.length ?? 0), 0);
-
-        let uniqueTracks = 0;
-        try {
-            const tracks = await this.dataManager.getAllRecords("tracks");
-            uniqueTracks = tracks.length;
-        } catch (err) {
-            console.error("Failed to load unique track count:", err);
-        }
-
-        if (statsContainer) {
+        // Render stats bar (common to both views)
+        if (statsContainer && playlists.length > 0) {
+            const totalTracks  = playlists.reduce((sum, pl) => sum + (pl.trackIDs?.length ?? 0), 0);
+            const uniqueTracks = tracks.length;
             statsContainer.hidden = false;
             statsContainer.innerHTML = `
                 <div class="library-stats-item">
-                    <span class="library-stats-value">${playlistCount}</span>
+                    <span class="library-stats-value">${playlists.length}</span>
                     <span class="library-stats-label">playlists</span>
                 </div>
                 <div class="library-stats-item">
@@ -414,7 +404,23 @@ class DashboardApp {
             `;
         }
 
-        // Build all rows off-DOM, then insert in one operation
+        if (this.libraryView === "tracks") {
+            this._renderLibraryTracks(tracks, container);
+        } else {
+            this._renderLibraryPlaylists(playlists, container);
+        }
+    }
+
+    // Render playlist rows into the library list container.
+    _renderLibraryPlaylists(playlists, container) {
+        if (!playlists || playlists.length === 0) {
+            const empty       = document.createElement("p");
+            empty.className   = "library-empty";
+            empty.textContent = "No playlists yet — import some to get started.";
+            container.appendChild(empty);
+            return;
+        }
+
         const fragment = document.createDocumentFragment();
         for (const pl of playlists) {
             const row     = document.createElement("div");
@@ -436,6 +442,38 @@ class DashboardApp {
 
         container.appendChild(fragment);
         console.log(`Library rendered: ${playlists.length} playlists`);
+    }
+
+    // Render track rows (title + artist) into the library list container.
+    _renderLibraryTracks(tracks, container) {
+        if (!tracks || tracks.length === 0) {
+            const empty       = document.createElement("p");
+            empty.className   = "library-empty";
+            empty.textContent = "No tracks yet — import some playlists to get started.";
+            container.appendChild(empty);
+            return;
+        }
+
+        const fragment = document.createDocumentFragment();
+        for (const track of tracks) {
+            const row     = document.createElement("div");
+            row.className = "library-row";
+
+            const nameSpan       = document.createElement("span");
+            nameSpan.className   = "library-row-name";
+            nameSpan.textContent = track.title ?? track.trackID;
+
+            const metaSpan       = document.createElement("span");
+            metaSpan.className   = "library-row-count"; // reuse count style for right-aligned meta
+            metaSpan.textContent = track.artist ?? "";
+
+            row.appendChild(nameSpan);
+            row.appendChild(metaSpan);
+            fragment.appendChild(row);
+        }
+
+        container.appendChild(fragment);
+        console.log(`Library rendered: ${tracks.length} tracks`);
     }
 
 
