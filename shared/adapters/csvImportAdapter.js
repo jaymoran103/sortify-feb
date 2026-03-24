@@ -232,7 +232,8 @@ class CsvImportAdapter {
 
     // Creates a playlist with the given name and track IDs, storing it in IDB.
     async _storePlaylist(dataManager, name, trackIDs) {
-        const newPlaylist = createPlaylist(name, trackIDs);
+        const newPlaylist = createPlaylist(name, trackIDs, null, new Date().toISOString());
+
         try {
             await dataManager.createRecord('playlists', newPlaylist);
         } catch (error) {

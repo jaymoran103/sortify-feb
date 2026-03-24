@@ -187,7 +187,9 @@ class SpotifyImportAdapter {
                 if (onProgress) onProgress(tracksImported, totalTracks, name);
             }
 
-            await dataManager.createRecord('playlists', createPlaylist(name, trackIDs));
+            // Create playlist record in IDB with spotify:playlist:{id} URI so we can identify it as Spotify-sourced later if needed.
+            const uri = `spotify:playlist:${spotifyPlaylistId}`;
+            await dataManager.createRecord('playlists', createPlaylist(name, trackIDs, uri, new Date().toISOString()));
 
             // Brief pause between playlists to stay under Spotify rate limits
             if (i < selectedPlaylists.length - 1) await _sleep(SLEEP_BETWEEN_PLAYLISTS_MS);

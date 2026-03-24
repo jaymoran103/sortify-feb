@@ -4,12 +4,17 @@
 //FUTURE define augmented session-layer playlist fields here? 
 
 
-//Create playlist based on provided fields.
-export function createPlaylist(name, trackIDs){
+// Create playlist based on provided fields.
+// Optional playlistURI is used for Spotify exports; 
+// Optional timeAdded is also used for sorting by date added.
+export function createPlaylist(name, trackIDs, playlistURI = null, timeAdded = null) {
     return {
         type: "playlist",
         name: name || "Playlist "+ Date.now(),
-        trackIDs: trackIDs || []
+        trackIDs: trackIDs || [],
+        playlistURI,
+        timeAdded,
+        lastModified: null      // set on save, not at creation
     }
 }
 

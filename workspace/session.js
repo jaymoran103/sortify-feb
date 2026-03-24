@@ -272,6 +272,8 @@ export class WorkspaceSession {
             }
             // Strip session layer fields before writing to IDB
             const { trackIDSet, playlistID: _sessionAlias, ...cleanPlaylist } = playlist;
+            cleanPlaylist.lastModified = new Date().toISOString(); // update lastModified on save
+
             console.log(
                 `WorkspaceSession: Writing '${playlist.name}' (id=${playlist.id}) — ${cleanPlaylist.trackIDs.length} tracks`
             );

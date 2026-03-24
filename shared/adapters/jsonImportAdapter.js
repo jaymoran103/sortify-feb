@@ -46,7 +46,17 @@ class JsonImportAdapter {
         // Import playlists — strip IDB id so autoIncrement generates a fresh key
         for (const pl of bundle.playlists) {
             const { id, ...rest } = pl; // discard stale IDB id
-            const newPlaylist = createPlaylist(rest.name, rest.trackIDs);
+
+            //Create playlist object with fresh id, 
+            const newPlaylist = createPlaylist(
+                rest.name,
+                rest.trackIDs,
+                rest.playlistURI ?? null,
+                rest.timeAdded ?? new Date().toISOString()
+            );
+            // Restore lastModified if present in the bundle
+            if (rest.lastModified) newPlaylist.lastModified = rest.lastModified;
+
             try {
                 await dataManager.createRecord('playlists', newPlaylist);
             } catch (err) {
