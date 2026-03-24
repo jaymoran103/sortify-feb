@@ -1,5 +1,7 @@
 import WorkspaceSession from "./session.js";
 import { promptModal, notifyModal, playlistSelectModal, warningModal } from "../shared/modal.js";
+import { filterTrackIDs, sortTrackIDs } from "../shared/trackUtils.js";
+import { dropdownMenu } from "../shared/dropdown.js";
 
 // MODULE OVERVIEW
 // workspace.js  — View layer. Renders the track table, handles user input, coordinates display state.
@@ -23,9 +25,6 @@ let currentFilter = "";         // lowercased search query, modified by search i
 let currentSort = "order-added"; // Sort state for table rendering. "order-added" uses stableOrder directly; other values compute a sort.
 let stableOrder = [];           // Array of all trackIDs in first-seen order, used as the unchanging base for all display ordering. Set once at load, updated only when tracks are added/removed from the workspace.
 let cachedFilteredIDs = null;   // Array representing a filtered subset of stableOrder for the current filter. Reset when filter changes or track set changes.
-
-// Dropdown state: singleton pattern ensures just one dropdown can open.
-let activeDropdown = null; // currently open dropdown panel, or null if none open.
 
 // Selection state: stored trackID(s) of currently selected row(s), and index of last clicked row for shift-click range selection.
 let selectedTrackIDs = new Set();
@@ -184,13 +183,10 @@ function setupEventListeners() {
         }
     });
 
-    // Close dropdown on outside click. 
-    document.addEventListener("click", () => closeDropdown());
-
     // Keyboard shortcuts: Escape closes dropdown; Cmd+A / Ctrl+A selects all tracks
     document.addEventListener("keydown", (e) => {
         if (e.key === "Escape") {
-            closeDropdown();
+            dropdownMenu.close();
             clearSelection();
         }
         if ((e.metaKey || e.ctrlKey) && e.key === "a") {
@@ -274,14 +270,16 @@ function renderTableHeader(){
             let dropdownX = rect.left;
             let dropdownY = rect.bottom;
 
-            openDropdown("playlist", playlist.playlistID, dropdownX, dropdownY);
+            const items = buildDropdownItems("playlist", playlist.playlistID);
+            if (items) dropdownMenu.open(items, dropdownX, dropdownY);
         });
 
         //Listener for right-click on header cell: also opens dropdown
         th.addEventListener("contextmenu", (e) => {
             e.preventDefault();
             const { clientX, clientY } = e;
-            openDropdown("playlist", playlist.playlistID, clientX, clientY);
+            const items = buildDropdownItems("playlist", playlist.playlistID);
+            if (items) dropdownMenu.open(items, clientX, clientY);
         });
 
         headerInner.appendChild(textContainer);
@@ -300,8 +298,8 @@ function renderTableHeader(){
 function renderTableBody(){
 
     // Access or recompute cachedFilteredIDs by applying the given filter to stableOrder, then sort. stableOrder is only recomputed when the session's track set changes.
-    const filteredIDs = cachedFilteredIDs ??= filterTrackIDs(stableOrder, currentFilter);
-    const sortedIDs = sortTrackIDs(filteredIDs, currentSort);
+    const filteredIDs = cachedFilteredIDs ??= filterTrackIDs(stableOrder, currentFilter, tracks);
+    const sortedIDs = sortTrackIDs(filteredIDs, currentSort, tracks, playlists, stableOrder);
     displayList = sortedIDs;
 
     // If no tracks to show, display message indicating this.
@@ -394,7 +392,8 @@ function createTrackRow(trackID, displayIndex){
         }
 
         // Open dropdown anchored to click coordinates
-        openDropdown("track",selectedTrackIDs,clientX,clientY);
+        const items = buildDropdownItems("track", selectedTrackIDs);
+        if (items) dropdownMenu.open(items, clientX, clientY);
     });
 
     //Index cell. Expects 1-based displayIndex, rather than actual position in displayList.
@@ -504,101 +503,7 @@ function collectTrackIDsInOrder(playlists){
     return allTrackIDs;
 }
 
-// Main Sort Method: returns sorted array of trackIDs based on given criteria. 
-// Approaches include deferring to stableOrder (order-added), checking for presence in a given playlist, or original field-based sort as default strategy
-function sortTrackIDs(trackIDs, criteria) {
 
-    // "order-added": return as-is fo default, preserving stableOrder sequence. 
-    if (criteria === "order-added") {
-        return trackIDs;
-    }
-
-    // "most-playlists": sort by how many loaded playlists contain each track, descending. Tiebreak by stableOrder position.
-    if (criteria === "most-playlists") {
-
-        // Count numbe of playlists containing each trackID.
-        const countMap = new Map();
-        for (const playlist of playlists) {
-            for (const tid of playlist.trackIDs) {
-                countMap.set(tid, (countMap.get(tid) || 0) + 1);
-            }
-        }
-
-        // Build a map of trackID to original position in stableOrder for tiebreaking.
-        const originalPosition = new Map();
-        stableOrder.forEach((trackID, index) => {
-            originalPosition.set(trackID, index);
-        });
-
-        // Sort: most playlists first, then by original position as tiebreaker to ensure stable order among tracks with the same count. T
-        const sortedTracks = [...trackIDs].sort((a, b) => {
-            const countA = countMap.get(a) || 0;
-            const countB = countMap.get(b) || 0;
-
-            // Sort by count descending
-            if (countA !== countB) {
-                return countB - countA; 
-            } 
-            // Tiebreak by original position in stableOrder, ensuring a deterministic result that aligns with default display behavior
-            else {
-                const posA = originalPosition.get(a);
-                const posB = originalPosition.get(b);
-                return posA - posB; // Tiebreak by original position
-            }
-        });
-
-        return sortedTracks;
-    } 
-
-    // "playlist:PlaylistID": tracks in the named playlist appear first in playlist order;
-    // remaining workspace tracks follow in their current filtered order.
-    if (criteria.startsWith("playlist:")) {
-
-        // Extract playlistID from criteria and find corresponding playlist. 
-        const playlistID = criteria.slice(9);
-        const playlist = playlists.find(p => p.playlistID === playlistID);
-
-        // // playlist no longer in session — defer to given ID order (stableOrder)
-        if (!playlist){
-            return trackIDs; 
-        }
-
-        // Tracks in the playlist, in playlist order, come first. Then the rest of the tracks follow in their current order.
-        const inPlaylist = new Set(playlist.trackIDs);
-        const trackIDsSet = new Set(trackIDs);
-        const playlistFirst = playlist.trackIDs.filter(id => trackIDsSet.has(id)); // playlist order, scoped to visible tracks
-        const rest = trackIDs.filter(id => !inPlaylist.has(id));
-        return [...playlistFirst, ...rest];
-    } //else {
-
-    // Compare given criteria to the given field's value for each track (title, artist, album), should extend fine to new fields down the road.
-    return [...trackIDs].sort((a, b) => {
-        const valA = tracks[a] ? (tracks[a][criteria] || "") : "";
-        const valB = tracks[b] ? (tracks[b][criteria] || "") : "";
-        return valA.localeCompare(valB);
-    });
-}
-// Main Filter Method: Returns filtered array of trackIDs based on search query. 
-// Checks if query (case insensitive) is included in title, artist, or album fields.
-// Pure filter transform — returns a new filtered array, never mutates input.
-// Query is lowercased on assignment (initSearchControl), not on each call.
-function filterTrackIDs(trackIDs, query) {
-    // If no query (empty or whitespace-only), return original array unfiltered.
-    if (!query) {
-        return trackIDs;
-    }
-
-    //Otherwise, return a new array of IDs where query is included in the title, artist, or album fields of the corresponding track.
-    return trackIDs.filter(id => {
-        const track = tracks[id];
-        if (!track) return false;
-        return (
-            (track.title  || "").toLowerCase().includes(query) ||
-            (track.artist || "").toLowerCase().includes(query) ||
-            (track.album  || "").toLowerCase().includes(query)
-        );
-    });
-}
 
 /** ==================
  *  CONTROLS
@@ -862,72 +767,25 @@ async function handleSave() {
  *  ===============
  */
 
-// Close any open dropdown by removing from DOM. Skips if no dropdown is open 
-function closeDropdown() {
-    if (activeDropdown) {
-        activeDropdown.remove();
-        activeDropdown = null;
-    }
-}
+// Returns items array [{ label, action } | { divider: true }] for the given dropdown mode.
+// Handles "track" -> "track-multi" upgrade and empty-selection guard internally.
+function buildDropdownItems(mode, id) {
 
-// Build and open a dropdown for the given playlistID, anchored to a given button element.
-// NOTE: Be careful with use of id in future refactors, can mean multiple things based on mode/usage
-function openDropdown(mode=null,id,x,y) {
-
-    // Close existing dropdown if open, then build new dropdown panel for the given playlistID.
-    closeDropdown();
-
-    //If opening a track dropdown and multiple tracks are selected, set mode to track-multi to trigger different dropdown options. 
-
-    // If opening a track dropdown, ensure at least one track is selected.
-    // If multiple are selected, set mode accordingly.
-    // contextmenu listener for track rows ensures a selection if a dropdown opens for an unselected track.
-    if (mode=="track"){
-        if (selectedTrackIDs.size==0){
+    // Upgrade track -> track-multi when multiple tracks selected. Abort if none selected.
+    if (mode === "track") {
+        if (selectedTrackIDs.size === 0) {
             console.warn("Attempted to open track dropdown with no selected tracks. Aborting.");
-            return;
+            return null;
         }
-        else if (selectedTrackIDs.size > 1){
+        if (selectedTrackIDs.size > 1) {
             mode = "track-multi";
         }
     }
 
-    let panel = buildDropdownPanel(id, mode);
-
-    //Exit if invalid mode given
-    if (!panel) {
-        console.error("Invalid dropdown mode or issue building dropdown:", mode);
-        return;
-    }
-
-    //NOTE: Previously determined dropdown coordinates from given anchorElement, now receives specific coodinates from caller
-
-    // Append hidden first so getBoundingClientRect() returns real dimensions, then clamp to viewport.
-    panel.style.cssText = "visibility:hidden;left:0;top:0";
-    document.body.appendChild(panel);
-    const { width, height } = panel.getBoundingClientRect();
-    x = Math.min(x, window.innerWidth  - width  - 10);
-    y = Math.min(y, window.innerHeight - height - 10);
-    panel.style.cssText = `left:${x}px;top:${y}px`;
-
-    activeDropdown = panel;
-}
-
-
-// Build and return a dropdown panel for the given playlistID
-// NOTE: be careful handling ids, especially after multi-track case is implemented.
-function buildDropdownPanel(id,mode) {
-
-    //Create div element for dropdown panel, which will be positioned and populated with items based on the given playlistID and mode.
-    const panel = document.createElement("div");
-    panel.className = "dropdown";
-
-    //Determine dropdown items based on mode and ID. Rest of the logic should be consistent
-    let items = null;
-    switch (mode){
-        case "playlist":
+    switch (mode) {
+        case "playlist": {
             const playlistID = id;
-            items = [
+            return [
                 { label: "Select all Tracks",           action: () => handleBulkMembershipUpdate(playlistID, true) },
                 { label: "Deselect all Tracks",         action: () => handleBulkMembershipUpdate(playlistID, false) },
                 { divider: true },
@@ -937,57 +795,31 @@ function buildDropdownPanel(id,mode) {
                 { label: "Duplicate Playlist",          action: () => handleDuplicatePlaylist(playlistID) },
                 { label: "Remove from workspace",       action: () => handleRemovePlaylist(playlistID) },
             ];
-            break;
+        }
         case "track":
-            //NOTE: most track actions currently don't expect an id, since handlers reference selectedTrackIDs directly. 
-            items = [
-                { label: "Add to all Playlists",        action: () => handleAddTrackToAll()}, 
-                { label: "Remove from all Playlists",   action: () => handleRemoveTrackFromAll()}, 
+            //NOTE: most track actions don’t expect an id — handlers reference selectedTrackIDs directly.
+            return [
+                { label: "Add to all Playlists",        action: () => handleAddTrackToAll()},
+                { label: "Remove from all Playlists",   action: () => handleRemoveTrackFromAll()},
                 { divider: true },
-                { label: "Delete Track from workspace", action: () => handleDeleteTrack()}, 
+                { label: "Delete Track from workspace", action: () => handleDeleteTrack()},
                 { divider: true },
-                //These two rely on "track" mode only opening when one track is selected (Caller openDropdown updates it to track-multi if multiple tracks are selected)
-                //Fine as long as all tracks are from the same source, not especially important or useful going forward
-                { label: "Open in Spotify",             action: () => handleOpenInSpotify([...selectedTrackIDs][0])}, 
+                // These two are only reachable when one track is selected (multi-track handled above).
+                { label: "Open in Spotify",             action: () => handleOpenInSpotify([...selectedTrackIDs][0])},
                 { label: "Copy Track ID",               action: () => handleCopyTrackID([...selectedTrackIDs][0])},
             ];
-            break;
         case "track-multi":
-            //NOTE: most track actions currently don't expect an id, since handlers reference selectedTrackIDs directly. 
-            items = [
-                { label: `Add ${selectedTrackIDs.size} tracks to all Playlists`,      action: () => handleAddTrackToAll()}, 
-                { label: `Remove ${selectedTrackIDs.size} tracks from all Playlists`, action: () =>  handleRemoveTrackFromAll()}, 
+            //NOTE: most track actions don’t expect an id, since handlers reference selectedTrackIDs directly.
+            return [
+                { label: `Add ${selectedTrackIDs.size} tracks to all Playlists`,      action: () => handleAddTrackToAll()},
+                { label: `Remove ${selectedTrackIDs.size} tracks from all Playlists`, action: () =>  handleRemoveTrackFromAll()},
                 { divider: true },
                 { label: `Delete ${selectedTrackIDs.size} tracks from workspace`,     action: () => handleDeleteTrack()},
             ];
-            break;
         default:
             console.error("Invalid dropdown mode:", mode);
             return null;
     }
-
-    // Prevent outside click listener from immediately closing this panel
-    panel.addEventListener("click", (e) => e.stopPropagation());
-
-    const ul = document.createElement("ul");
-
-    // For each item, create an li element. If it's a divider, add the divider class. Otherwise, set text and click handler to trigger the corresponding action and close the dropdown.
-    for (const item of items) {
-        const li = document.createElement("li");
-        if (item.divider) {
-            li.className = "dropdown__divider";
-        } else {
-            li.textContent = item.label;
-            li.addEventListener("click", () => {
-                closeDropdown();
-                item.action();
-            });
-        }
-        ul.appendChild(li);
-    }
-
-    panel.appendChild(ul);
-    return panel;
 }
 
 // Handler for select/deselect all - updates membership of each shown track in a playlist to match desired state.
@@ -995,7 +827,7 @@ function buildDropdownPanel(id,mode) {
 function handleBulkMembershipUpdate(playlistID, desiredState) {
 
     // Access or recopute cachedFilteredID, using stableOrder as a base to be filtered from (implictly sorted by added order))
-    cachedFilteredIDs ??= filterTrackIDs(stableOrder, currentFilter);
+    cachedFilteredIDs ??= filterTrackIDs(stableOrder, currentFilter, tracks);
 
     const playlist = playlists.find(p => p.playlistID === playlistID);
 
@@ -1307,7 +1139,7 @@ function handleShiftClick(currentIndex, currentTrackID, rowEl) {
 function handleCmdA() {
 
     // Determine filtered ID set from cache or stableOrder.
-    const filteredIDs = cachedFilteredIDs ??= filterTrackIDs(stableOrder, currentFilter);
+    const filteredIDs = cachedFilteredIDs ??= filterTrackIDs(stableOrder, currentFilter, tracks);
 
     // Add all filtered IDs to the selection set
     for (const id of filteredIDs) {
