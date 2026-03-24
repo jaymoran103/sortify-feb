@@ -210,62 +210,69 @@ export function warningModal({ title, message, actions = [] } = {}) {
 }
 
 
-// open a playlist selector modal: scrollable list of playlists with checkboxes and search.
-// playlists: array of { id, name, trackIDs } — pre-filtered by caller (e.g. excluding already-loaded ones).//TODO Make this clear to the user somewhere? Or just dont filter, really depends on use case/library size. Readding could prompt a modal offering to duplicate that one. KIS: keep as is.
-// Returns an array of selected IDB ids, or null if cancelled/dismissed.
-// FUTURE: Reuse for dashboard workspace launcher and any export playlist picker.
-export function playlistSelectModal({ title = "Select Playlists", confirmLabel = "Add", cancelLabel = "Cancel", playlists = [] } = {}) {
+// Internal list-picker modal used by all selector variants.
+// Extend by adding a new exported wrapper that supplies getID and getCount for the item shape.
+// getCount may return null; the count column is omitted from the row in that case.
+// FUTURE: add sortSelected boolean param here to float selected items to top of returned array.
+// FUTURE: add selectAll button param here if needed, not in wrapper functions.
+function _openSelectModal({ title, 
+                            confirmLabel = "Add", 
+                            cancelLabel = "Cancel",
+                            playlists = [], 
+                            getID, 
+                            getCount,
+                            searchPlaceholder = "Search playlists\u2026" }) {
     let selectedIds = new Set();
     let noteEl;
 
-    //Helper method triggered when playlist checkbox toggled: updates selectedIds set, row highlight, and toggles confirm button state depending on input validity.
-    //FUTURE: Extract state update/validation to base modal for a more responsive "OK/Continue" button? Dont wanna invalidate existing validation methods for now, theyre more than fine
+    // Update "N selected" counter and confirm button state on checkbox toggle.
     function updateState() {
-        const count = selectedIds.size;
-        noteEl.textContent          = count > 0 ? `${count} selected` : "";
+        const count             = selectedIds.size;
+        noteEl.textContent      = count > 0 ? `${count} selected` : "";
         _modal._confirmBtn.disabled = count === 0;
     }
 
-    // Helper method a single playlist row with checkbox, name, and track count
-    //NOTE: Leaving here for now for simplicity, want to extract as non-anonymous function later. 
-    //FUTURE: Extract as non-modal specific element for components like dashboard library widget?
-    function buildPlaylistRow(pl, list) {
-        const label       = document.createElement("label");
-        label.className   = "modal__list-row";
+    // Build a single list row with checkbox, name, and optional track count.
+    function buildRow(item, list) {
+        const label     = document.createElement("label");
+        label.className = "modal__list-row";
 
-        const checkbox    = document.createElement("input");
-        checkbox.type     = "checkbox";
+        const checkbox = document.createElement("input");
+        checkbox.type  = "checkbox";
 
-        // Wire checkbox change to update selectedIds set and row highlight, then update confirm button state.
+        // Wire checkbox to selectedIds set, row highlight, and confirm state.
         checkbox.addEventListener("change", () => {
+            const id = getID(item);
             if (checkbox.checked) {
-                selectedIds.add(pl.id);
+                selectedIds.add(id);
                 label.classList.add("modal__list-row--checked");
             } else {
-                selectedIds.delete(pl.id);
+                selectedIds.delete(id);
                 label.classList.remove("modal__list-row--checked");
             }
             updateState();
         });
 
-        const nameSpan        = document.createElement("span");
-        nameSpan.className    = "modal__list-row-name";
-        nameSpan.textContent  = pl.name;
-
-        const countSpan       = document.createElement("span");
-        countSpan.className   = "modal__list-row-count";
-        const trackCount      = pl.trackIDs?.length ?? 0;
-        countSpan.textContent = `${trackCount} track${trackCount !== 1 ? "s" : ""}`;
+        const nameSpan       = document.createElement("span");
+        nameSpan.className   = "modal__list-row-name";
+        nameSpan.textContent = item.name;
 
         label.appendChild(checkbox);
         label.appendChild(nameSpan);
-        label.appendChild(countSpan);
-        list.appendChild(label);
 
-        return { label, name: pl.name.toLowerCase() };
+        // Count column is optional — omit if getCount returns null.
+        const count = getCount(item);
+        if (count !== null) {
+            const countSpan       = document.createElement("span");
+            countSpan.className   = "modal__list-row-count";
+            countSpan.textContent = `${count} track${count !== 1 ? "s" : ""}`;
+            label.appendChild(countSpan);
+        }
+
+        list.appendChild(label);
+        return { label, name: item.name.toLowerCase() };
     }
 
-    // Open modal with body callback that builds search input, playlist rows, and search filter logic.
     return _modal.open({
         title,
         confirmLabel,
@@ -276,23 +283,22 @@ export function playlistSelectModal({ title = "Select Playlists", confirmLabel =
             _modal._overlay.firstElementChild.classList.add("modal--list");
 
             // Search input
-            const searchInput         = document.createElement("input");
-            searchInput.type          = "text";
-            searchInput.className     = "modal__search-input";
-            searchInput.placeholder   = "Search playlists\u2026";
+            const searchInput       = document.createElement("input");
+            searchInput.type        = "text";
+            searchInput.className   = "modal__search-input";
+            searchInput.placeholder = searchPlaceholder;
 
             // Scrollable list
-            const list      = document.createElement("div");
-            list.className  = "modal__list";
+            const list     = document.createElement("div");
+            list.className = "modal__list";
 
-            const emptyMsg        = document.createElement("p");
-            emptyMsg.className    = "modal__list-empty";
-            emptyMsg.textContent  = "No playlists match your search.";
-            emptyMsg.hidden       = true;
+            const emptyMsg       = document.createElement("p");
+            emptyMsg.className   = "modal__list-empty";
+            emptyMsg.textContent = "No results match your search.";
+            emptyMsg.hidden      = true;
 
-            // One row per playlist
-            const rows = playlists.map(pl => buildPlaylistRow(pl, list));
-
+            // One row per item
+            const rows = playlists.map(item => buildRow(item, list));
             list.appendChild(emptyMsg);
 
             // Filter rows on search input
@@ -327,108 +333,44 @@ export function playlistSelectModal({ title = "Select Playlists", confirmLabel =
     });
 }
 
-// Variant of playlistSelectModal for Spotify playlists.
-// Same method signature and return type, but expects playlist objects with { spotifyPlaylistId, name, trackCount } and uses spotifyPlaylistId for the selected IDs.
-// FUTURE: extract shared logic to a base selection modal or helper methods, fine for now
-// playlists: [{ spotifyPlaylistId, name, trackCount }]  — trackCount is a raw number, not derived from trackIDs
+
+// Playlist selector modal — local IDB playlists.
+// playlists: array of { id, name, trackIDs }
+// Returns an array of selected IDB ids, or null if cancelled/dismissed.
+// TODO: decide whether to pre-filter already-loaded playlists at the call site or show all with a note.
+export function playlistSelectModal({ title = "Select Playlists", confirmLabel = "Add", cancelLabel = "Cancel", playlists = [] } = {}) {
+    return _openSelectModal({
+        title, confirmLabel, cancelLabel, playlists,
+        getID:    pl => pl.id,
+        getCount: pl => pl.trackIDs?.length ?? 0,
+    });
+}
+
+// Playlist selector modal — Spotify playlists.
+// playlists: array of { spotifyPlaylistId, name, trackCount }
 // Returns an array of selected spotifyPlaylistId strings, or null if cancelled/dismissed.
 export function spotifyPlaylistSelectModal({ title = "Select Playlists", confirmLabel = "Import", cancelLabel = "Cancel", playlists = [] } = {}) {
-    let selectedIds = new Set();
-    let noteEl;
-
-    // Update selected set, row highlight, and confirm button state on checkbox toggle
-    function updateState() {
-        const count = selectedIds.size;
-        noteEl.textContent          = count > 0 ? `${count} selected` : "";
-        _modal._confirmBtn.disabled = count === 0;
-    }
-
-    // Build a single playlist row with checkbox, name, and track count
-    function buildPlaylistRow(pl, list) {
-        const label     = document.createElement("label");
-        label.className = "modal__list-row";
-
-        const checkbox = document.createElement("input");
-        checkbox.type  = "checkbox";
-
-        checkbox.addEventListener("change", () => {
-            if (checkbox.checked) {
-                selectedIds.add(pl.spotifyPlaylistId);
-                label.classList.add("modal__list-row--checked");
-            } else {
-                selectedIds.delete(pl.spotifyPlaylistId);
-                label.classList.remove("modal__list-row--checked");
-            }
-            updateState();
-        });
-
-        const nameSpan       = document.createElement("span");
-        nameSpan.className   = "modal__list-row-name";
-        nameSpan.textContent = pl.name;
-
-        const countSpan       = document.createElement("span");
-        countSpan.className   = "modal__list-row-count";
-        countSpan.textContent = `${pl.trackCount} track${pl.trackCount !== 1 ? "s" : ""}`;
-
-        label.appendChild(checkbox);
-        label.appendChild(nameSpan);
-        label.appendChild(countSpan);
-        list.appendChild(label);
-
-        return { label, name: pl.name.toLowerCase() };
-    }
-
-    return _modal.open({
-        title,
-        confirmLabel,
-        cancelLabel,
-        showCancel: true,
-        body(container) {
-            _modal._overlay.firstElementChild.classList.add("modal--list");
-
-            const searchInput       = document.createElement("input");
-            searchInput.type        = "text";
-            searchInput.className   = "modal__search-input";
-            searchInput.placeholder = "Search playlists\u2026";
-
-            const list     = document.createElement("div");
-            list.className = "modal__list";
-
-            const emptyMsg       = document.createElement("p");
-            emptyMsg.className   = "modal__list-empty";
-            emptyMsg.textContent = "No playlists match your search.";
-            emptyMsg.hidden      = true;
-
-            const rows = playlists.map(pl => buildPlaylistRow(pl, list));
-            list.appendChild(emptyMsg);
-
-            searchInput.addEventListener("input", () => {
-                const query = searchInput.value.trim().toLowerCase();
-                let visibleCount = 0;
-                for (const { label, name } of rows) {
-                    const match = !query || name.includes(query);
-                    label.hidden = !match;
-                    if (match) visibleCount++;
-                }
-                emptyMsg.hidden = visibleCount > 0;
-            });
-
-            container.appendChild(searchInput);
-            container.appendChild(list);
-
-            const old = _modal._footerEl.querySelector(".modal__footer-note");
-            if (old) old.remove();
-            noteEl           = document.createElement("span");
-            noteEl.className = "modal__footer-note";
-            _modal._footerEl.prepend(noteEl);
-
-            _modal._confirmBtn.disabled = true;
-        },
-        onConfirm() {
-            if (selectedIds.size === 0) return;
-            _modal.close([...selectedIds]);
-        }
+    return _openSelectModal({
+        title, confirmLabel, cancelLabel, playlists,
+        getID:    pl => pl.spotifyPlaylistId,
+        getCount: pl => pl.trackCount,
     });
+}
+
+// FUTURE: Track selector modal — local IDB tracks.
+// tracks: array of { trackID, title, artist, album }
+// Returns an array of selected trackIDs, or null if cancelled/dismissed.
+// FUTURE: pass sortSelected: true once that param is added to _openSelectModal, to float chosen tracks to top.
+export function trackSelectModal({ title = "Select Tracks", confirmLabel = "Add", cancelLabel = "Cancel", tracks = [] } = {}) {
+    console.warn("trackSelectModal not yet implemented.");
+    return Promise.resolve(null);
+    // return _openSelectModal({
+    //     title, confirmLabel, cancelLabel,
+    //     playlists: tracks,                          // _openSelectModal uses 'playlists' param name internally
+    //     getID:              t => t.trackID,
+    //     getCount:           () => null,             // no count column for tracks
+    //     searchPlaceholder: "Search tracks\u2026",
+    // });
 }
 
 
