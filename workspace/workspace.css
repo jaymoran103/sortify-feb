@@ -281,10 +281,13 @@ body {
     position: relative;
 }
 .track-table__checkbox input[type="checkbox"] {
-    width: 16px;
-    height: 16px;
+    width: 30px;
+    height: 30px;
     cursor: pointer;
     accent-color: var(--color-green);
+    margin: 1px; /* ensure enough space in the playlist column cell */    
+/*     transform: scale(1.1); checkbox size bump */
+    transform-origin: center;
 }
 
 tbody .track-table__checkbox:hover {

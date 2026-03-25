@@ -123,6 +123,9 @@ async function init() {
     renderTableHeader();
     renderTableBody();
 
+    //Apply auto width on first load.
+    handleAutoFitColumnWidth();
+
     hideProgressBar();
 }
 
@@ -726,12 +729,15 @@ async function handleBackButton() {
             title: "Empty Playlist",
             message: `${label} Leave anyway?`,
             actions: [
+                // No option to save: separate concern from empty playlists, handled afterward if relevant
                 { label: "Cancel", value: null },
-                { label: "Exit Without Saving", value: "discard-exit", className: "modal__btn"},//Switched from danger to default, not sure which to push. This
-                { label: "Save and Exit", value: "save-exit", className: "modal__btn--primary"},
+                // { label: "Exit Without Saving", value: "discard-exit", className: "modal__btn"},
+                // { label: "Save and Exit", value: "save-exit", className: "modal__btn--primary"},
+                { label: "Exit", value: "discard-exit", className: "modal__btn--primary"},
             ]
         });
         if (result === "save-exit") { await handleSave(); }
+        // else if (result === "discard-exit") {   } // null = cancelled
         else if (result !== "discard-exit") { return; } // null = cancelled
     }
 
@@ -917,16 +923,19 @@ function buildDropdownItems(mode, id) {
             const atRight = idx === playlists.length - 1;
 
             const core_items = [
+                // Selection / Sort options
                 { label: "Select all Tracks",           action: () => handleBulkMembershipUpdate(playlistID, true) },
                 { label: "Deselect all Tracks",         action: () => handleBulkMembershipUpdate(playlistID, false) },
                 { label: "Sort by this playlist",       action: () => setSortByPlaylist(playlistID) },
 
+                // Display options
                 { divider: true },
                 { label: "Move Left",  stub: atLeft,  action: () => handleMovePlaylist(playlistID, -1) },
                 { label: "Move Right", stub: atRight, action: () => handleMovePlaylist(playlistID,  1) },
                 { label: "Resize Columns",             action: () => handleSetColumnWidth() },
                 { label: "Auto-fit columns",           action: () => handleAutoFitColumnWidth() },
 
+                //Playlist management options
                 { divider: true },
                 { label: "Rename Playlist",             action: () => handleRenamePlaylist(playlistID) },
                 { label: "Duplicate Playlist",          action: () => handleDuplicatePlaylist(playlistID) },
@@ -936,9 +945,7 @@ function buildDropdownItems(mode, id) {
             //Conditionally add Spotify and Copy ID options if this playlist has a spotifyURI
             const playlistObject = playlists.find(p => p.playlistID === playlistID);
             const playlistURI = playlistObject?.playlistURI;
-            // const playlistURI = playlists.find(p => p.playlistID === playlistID)?.playlistURI;
-            // console.table(playlistObject);
-            // console.log(playlistURI);
+
             if (playlistURI) {
                  core_items.push(
                     { divider: true },
@@ -961,11 +968,9 @@ function buildDropdownItems(mode, id) {
                 { label: "Delete Track from workspace", action: () => handleDeleteTrack()},
             ]
 
-            //FUTURE replace with URI specific field rather than trackID
-            const trackID = [...selectedTrackIDs][0];
-            // const trackID = id.keys().next().value;
-
             // Conditionally add Spotify and Copy ID options if this trackID has a Spotify URI (verified by string comparison for now)
+            const trackID = [...selectedTrackIDs][0]; //FUTURE replace with URI specific field rather than trackID
+            
             if (trackID.startsWith("spotify:track:")) {
                 core_items.push(
                     { divider: true },
@@ -1212,6 +1217,23 @@ async function handleAddPlaylist() {
         offerSelectAll: false
     });
 
+    const potentialLength = playlists.length + selectedIds.length;
+
+    //If selection would result in more than 10 playlists, warn user.
+    if (playlists.length <= 10 && potentialLength > 10) {
+        const proceed = await warningModal({
+            title: `Display warning - ${potentialLength} Playlists`,
+            message: `The workspace is designed for up to 10 playlists, loading more may cause display or performance issues. Do you want to proceed?`,
+            // message: `You have selected ${selectedIds.length} playlists. The workspace is designed for up to 10 playlists. Loading more may cause display or performance issues. Do you want to proceed?`,
+            actions: [
+                { label: "Cancel", value: false, className: "modal__btn--cancel" },
+                { label: "Proceed", value: true, className: "modal__btn--primary" }
+            ]
+        });
+
+        if (!proceed) return;
+    }
+
     //If user cancelled or made no selection, exit. 
     if (!selectedIds) return;
 
@@ -1279,18 +1301,18 @@ async function handleAddTrackToWorkspace() {
     }
 
     // Add tracks to first playlist in workspace (or create a new one if none exist)
-    let destination = playlists[0];
-    if (!destination) {
-        destination = session.createEmptyPlaylist("Imported Tracks");
-        playlists.push(destination);
-    }
+    // let destination = playlists[0];
+    // if (!destination) {
+    //     destination = session.createEmptyPlaylist("Imported Tracks");
+    //     playlists.push(destination);
+    // }
 
     for (const trackID of selectedTrackIDs) {
-        if (!destination.trackIDSet.has(trackID)) {
-            destination.trackIDs.push(trackID);
-            destination.trackIDSet.add(trackID);
-            session.modifiedPlaylists.add(destination.playlistID);
-        }
+        // if (!destination.trackIDSet.has(trackID)) {
+        //     destination.trackIDs.push(trackID);
+        //     destination.trackIDSet.add(trackID);
+        //     session.modifiedPlaylists.add(destination.playlistID);
+        // }
         if (!stableOrder.includes(trackID)) {
             stableOrder.push(trackID);
         }

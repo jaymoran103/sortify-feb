@@ -720,6 +720,21 @@ class DashboardApp {
 
         if (!selectedIds || selectedIds.length === 0) return;
 
+        //Warn if user selects more than 10 playlists,
+        if (selectedIds.length > 10) {
+            const proceed = await warningModal({
+                title: `Large Selection - ${selectedIds.length} Playlists`,
+                message: `The workspace is designed for up to 10 playlists, loading more may cause display or performance issues. Do you want to proceed?`,
+                // message: `You have selected ${selectedIds.length} playlists. The workspace is designed for up to 10 playlists. Loading more may cause display or performance issues. Do you want to proceed?`,
+                actions: [
+                    { label: "Cancel", value: false, className: "modal__btn--cancel" },
+                    { label: "Proceed", value: true, className: "modal__btn--primary" }
+                ]
+            });
+
+            if (!proceed) return;
+        }
+
         this.openWorkspaceWithPlaylists(selectedIds);
     }
 
