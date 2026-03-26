@@ -1,48 +1,11 @@
-// Spotify import adapter. Fetches playlists + tracks from the Spotify API and stores
-// them in IDB via dataManager. Delegates auth to spotifyAuthManager.
+// Spotify import adapter. Fetches playlists + tracks and stores them in IDB via dataManager. Delegates auth to spotifyAuthManager.
 
 import {SLEEP_BETWEEN_PLAYLISTS_MS} from '../spotifyConfig.js';
+import spotifyAuthManager from '../spotifyAuthManager.js';
 import { createPlaylist, createTrack } from '../models.js';
-
-
-// API HELPERS
-
-const BASE_URL = 'https://api.spotify.com/v1';
 
 function _sleep(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
-}
-
-
-
-// Fetch wrapper: adds auth header, retries on 429 up to 3 times using Retry-After value.
-// Retry-After is not always exposed over CORS, so we fall back to 30s per attempt —
-// long enough to clear Spotify's typical rate-limit window.
-// onRateLimit(seconds) is called before each wait so callers can surface it in the UI.
-// FUTURE: Refactor to use a shared API helper module. (At least 429 handling)
-async function _apiFetch(endpoint, token, onRateLimit) {
-    const url     = BASE_URL + endpoint;
-    const headers = { 'Authorization': 'Bearer ' + token };
-
-    // Attempt to get response, returning unless a 429 error is encountered - in which case it waits 
-    let response;
-    for (let attempt = 0; attempt < 3; attempt++) {
-        response = await fetch(url, { headers });
-        if (response.status !== 429) break;
-
-        // Use Retry-After header if available; fall back to 30s (Spotify's typical window)
-        const retryAfter = Number(response.headers.get('Retry-After') || 0); // report result as 0 if not reeived
-        const waitMs     = retryAfter > 0 ? (retryAfter + 1) * 1000 : 30000; // add 1s to buffer, or use 30s if no retryAfter provided
-        if (onRateLimit) onRateLimit(Math.round(waitMs / 1000)); // report wait time to caller so it can update the UI
-        await _sleep(waitMs);
-    }
-
-    if (!response.ok) {
-        const body = await response.json().catch(() => ({}));
-        throw new Error(`Spotify API ${response.status} on ${endpoint}${body.error?.message ? ': ' + body.error.message : ''}`);
-    }
-
-    return response.json();
 }
 
 
@@ -60,7 +23,7 @@ class SpotifyImportAdapter {
         let total  = null;
 
         while (true) {
-            const data = await _apiFetch(`/me/playlists?limit=50&offset=${offset}`, token, onRateLimit);
+            const data = await spotifyAuthManager.apiFetch(`/me/playlists?limit=50&offset=${offset}`, token, onRateLimit);
             if (total === null) total = data.total;
 
             for (const item of data.items) {
@@ -93,7 +56,7 @@ class SpotifyImportAdapter {
         let total  = null;
 
         while (true) {
-            const data = await _apiFetch(`/playlists/${spotifyPlaylistId}/items?limit=50&offset=${offset}`, token);
+            const data = await spotifyAuthManager.apiFetch(`/playlists/${spotifyPlaylistId}/items?limit=50&offset=${offset}`, token);
             if (total === null) total = data.total;
 
             for (const item of data.items) {

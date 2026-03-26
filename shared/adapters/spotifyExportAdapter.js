@@ -1,63 +1,11 @@
 // Spotify export adapter. Pushes local IDB playlists to the user's Spotify account
-// as new private playlists. Delegates auth to spotifyAuthManager.
+// as new private playlists. Delegates auth and API calls to spotifyAuthManager.
 
 import spotifyAuthManager from '../spotifyAuthManager.js';
 import { SLEEP_BETWEEN_PLAYLISTS_MS } from '../spotifyConfig.js';
 
-
-// API HELPERS
-
-const BASE_URL = 'https://api.spotify.com/v1';
-
 function _sleep(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
-}
-
-// GET wrapper: adds auth header, retries on 429 up to 3 times using Retry-After value.
-// Retry-After is not always exposed over CORS, so we fall back to 30s per attempt.
-// FUTURE: Refactor to use a shared API helper module.
-async function _apiFetch(endpoint, token) {
-    const url     = BASE_URL + endpoint;
-    const headers = { 'Authorization': 'Bearer ' + token };
-
-    // Attempt to get response, returning unless a 429 error is encountered - in which case it waits 
-    let response;
-    for (let attempt = 0; attempt < 3; attempt++) {
-        response = await fetch(url, { headers });
-        if (response.status !== 429) break;
-
-        // Use Retry-After header if available; fall back to 30s (Spotify's typical window)
-        const retryAfter = Number(response.headers.get('Retry-After') || 0); // report result as 0 if not reeived
-        const waitMs     = retryAfter > 0 ? (retryAfter + 1) * 1000 : 30000; // add 1s to buffer, or use 30s if no retryAfter provided
-        if (onRateLimit) onRateLimit(Math.round(waitMs / 1000)); // report wait time to caller so it can update the UI
-        await _sleep(waitMs);
-    }
-
-    if (!response.ok) {
-        const body = await response.json().catch(() => ({}));
-        throw new Error(`Spotify API ${response.status} on ${endpoint}${body.error?.message ? ': ' + body.error.message : ''}`);
-    }
-
-    return response.json();
-}
-
-// POST wrapper: sends JSON body with auth header, throws on non-2xx
-async function _apiPost(endpoint, token, body) {
-    const response = await fetch(BASE_URL + endpoint, {
-        method:  'POST',
-        headers: {
-            'Authorization': 'Bearer ' + token,
-            'Content-Type':  'application/json',
-        },
-        body: JSON.stringify(body),
-    });
-
-    if (!response.ok) {
-        const err = await response.json().catch(() => ({}));
-        throw new Error(`Spotify API ${response.status} on ${endpoint}${err.error?.message ? ': ' + err.error.message : ''}`);
-    }
-
-    return response.json();
 }
 
 
@@ -69,7 +17,7 @@ class SpotifyExportAdapter {
     // Uses /me/playlists — the current (non-deprecated) create endpoint.
     // Returns { id, url }
     async _createPlaylist(token, name) {
-        const data = await _apiPost('/me/playlists', token, {
+        const data = await spotifyAuthManager.apiPost('/me/playlists', token, {
             name,
             public:      false,
             description: 'Exported from Sortify',
@@ -84,11 +32,11 @@ class SpotifyExportAdapter {
 
         for (let i = 0; i < total; i += 100) {
             const chunk = uris.slice(i, i + 100);
-            await _apiPost(`/playlists/${playlistId}/items`, token, { uris: chunk });
+            await spotifyAuthManager.apiPost(`/playlists/${playlistId}/items`, token, { uris: chunk });
 
             // sleep to avoid hitting rate limits for large playlists
-            await _sleep(SLEEP_BETWEEN_PLAYLISTS_MS);     
-                   
+            await _sleep(SLEEP_BETWEEN_PLAYLISTS_MS);
+
             if (onProgress) onProgress(Math.min(i + 100, total), total);
         }
     }

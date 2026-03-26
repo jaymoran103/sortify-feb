@@ -31,6 +31,9 @@ async function _generateChallenge(verifier) {
     return _base64url(hash);
 }
 
+// Base URL for all Spotify API calls
+const _API_BASE = 'https://api.spotify.com/v1';
+
 // AUTH MANAGER
 
 class SpotifyAuthManager {
@@ -125,6 +128,59 @@ class SpotifyAuthManager {
         if (this.isAuthenticated()) return sessionStorage.getItem(TOKEN_KEY);
         await this.authenticate();
         // authenticate() redirects — execution does not continue in this page load
+    }
+
+
+    // SHARED API HELPERS
+    // Used by spotifyImportAdapter and spotifyExportAdapter. Centralised here so both adapters share identical retry behaviour without duplicating the logic.
+
+    _sleep(ms) {
+        return new Promise(resolve => setTimeout(resolve, ms));
+    }
+
+    // GET with Bearer auth and 429 retry. onRateLimit(seconds) called before each wait.
+    // Retry-After header is often blocked by CORS; falls back to 30s flat if absent.
+    async apiFetch(endpoint, token, onRateLimit) {
+        const headers = { 'Authorization': 'Bearer ' + token };
+        let response;
+        for (let attempt = 0; attempt < 3; attempt++) {
+            response = await fetch(_API_BASE + endpoint, { headers });
+            if (response.status !== 429) break;
+            const retryAfter = Number(response.headers.get('Retry-After') || 0);
+            const waitMs     = retryAfter > 0 ? (retryAfter + 1) * 1000 : 30000;
+            if (onRateLimit) onRateLimit(Math.round(waitMs / 1000));
+            await this._sleep(waitMs);
+        }
+        if (!response.ok) {
+            const body = await response.json().catch(() => ({}));
+            throw new Error(`Spotify API ${response.status} on ${endpoint}${body.error?.message ? ': ' + body.error.message : ''}`);
+        }
+        return response.json();
+    }
+
+    // POST with bearer auth and 429 retry. onRateLimit(seconds) called before each wait.
+    async apiPost(endpoint, token, body, onRateLimit) {
+        let response;
+        for (let attempt = 0; attempt < 3; attempt++) {
+            response = await fetch(_API_BASE + endpoint, {
+                method:  'POST',
+                headers: {
+                    'Authorization': 'Bearer ' + token,
+                    'Content-Type':  'application/json',
+                },
+                body: JSON.stringify(body),
+            });
+            if (response.status !== 429) break;
+            const retryAfter = Number(response.headers.get('Retry-After') || 0);
+            const waitMs     = retryAfter > 0 ? (retryAfter + 1) * 1000 : 30000;
+            if (onRateLimit) onRateLimit(Math.round(waitMs / 1000));
+            await this._sleep(waitMs);
+        }
+        if (!response.ok) {
+            const err = await response.json().catch(() => ({}));
+            throw new Error(`Spotify API ${response.status} on ${endpoint}${err.error?.message ? ': ' + err.error.message : ''}`);
+        }
+        return response.json();
     }
 }
 
