@@ -310,6 +310,8 @@ export class WorkspaceSession {
         // Await all writes before clearing.
         await Promise.all(savePromises);
         this.modifiedPlaylists.clear();
+
+        this.persistSession(); // Update sessionStorage to reflect new playlist IDs and current set after save
         console.log("WorkspaceSession: Save complete");
     }
 

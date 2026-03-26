@@ -4,17 +4,16 @@ For vanilla implementation:
 Workspace Features
 [x] Warnings before big actions: remove track from workspace, leave without saving, leave with empty playlist¨¨¨
 [x] Fix dropdown position adjustment: should be bumping coordinates if too close to the right or bottom
-- Column resizing: separate info and playlist sides, resizing handle between them
-- Column move: hover click and drag, or in a "manage playlists" menu
+[x] Column resizing: separate info and playlist sides, resizing handle between them
+[x] Column move: in a "manage playlists" menu
 [x] Base sort: Cache an unchanging array of trackIDs, first-seen order from playlists. Stable set is only updated when the track set itself changes (only on add/remove from session)
     [x] When tracks are removed (via track control) do spot removal from order cache, avoiding need for a re-sort.
     [x] When tracks are added (via new playlist) they'll add to the end, not-yet-seen tracks can do the same in the cached list.
-    [-] IF tracks were rearranged, (not currently possible, playlists dont move and there's no promised track order to change) update should be deferred to the next time a sort or filter changes the displayed rows.
 [x] Sort by playlist: Update a cached 'current' sort list to prioritize THAT playlist. Valid case to adjust the cached set, since the user will expect the resulting update. This added complexity isn't worth it atm.
 [x] Ensure 'back to workspace' button on error page works, or is hidden. Same for any other buttons.
 
 Workspace Layout
-[-] Consolidate to single "Add Playlist" Button: Modal for empty, import, or duplicate. Select name there. Waiting to see how hiding might shake out, cause then we'd want 2 buttons again
+[x] Consolidate to single "Add Playlist" Button: Menu dropdown for empty, import, or duplicate. Select name there. 
 [x] Add playlist button(s) sits on control bar right, save control moves to top right, "back to dashboard" moves to top left.
 [x] Playlist header detail: number of tracks, better button look and placement.
 
@@ -23,13 +22,13 @@ Workspace Inessential
 [x] Sort by playlist
 [-] Playlist header detail: # unique, total runtime?
 [x] Implement a "most playlists" sort method using the same logic the similarity checker will use? 
-- support field-specific queries - artist:queen, album:blonde, even duration:>300? No current need for these
-- Sort by overlap: Most represented to least. Decide when order refreshes, might be easier to just bump sort back to "Select" default whenever user action contradicts existing sort. Gotta be a design pattern for this.
+[-] support field-specific queries - artist:queen, album:blonde, even duration:>300? No current need for these
+[x] Sort by overlap: Most represented to least. Decide when order refreshes, might be easier to just bump sort back to "Select" default whenever user action contradicts existing sort. Gotta be a design pattern for this.
 
 Dashboard Priorities
 [x] Library Overview: scrollable widget with playlists, expandable to show track rows, or in accompanying "playlist overview"
-    [] add search and sort here?
-    [] collapsible tracklists? probably too cluttered
+    [x] add search and sort here?
+    [-] collapsible tracklists? skipping in favor of track search. Thats what the workspace is for anyway
 [x] Import Control: Button to import playlists. will open up a window prompting use to select import via local files, or the spotify API.
 [x] Import status indicator? Dashboard or import window could show progress as the full set of playlists is imported. CSV import can take up to 10 seconds (but predictable since # of files and progress are easily trackable) and spotify API will take much longer.
 [x] Export Control: Same as import, let user choose export mode: local files, spotify API.
@@ -38,10 +37,10 @@ Dashboard Priorities
 
 Dashboard Inessential
 
-[ ] Library utils 
+[x] Library utils 
     [x] buttons to remove specific playlists or clear while db.
-    [ ] access: if too many options accumulate, access with "manage" button or selection boxes.
-    [ ] Tracks view: quick way to view and search presence of songs outside workspace. Not critical but feels like a feature gap for usual use cases.
+    [x] access: if too many options accumulate, access with "manage" button or selection boxes.
+    [x] Tracks view: quick way to view and search presence of songs outside workspace. Not critical but feels like a feature gap for usual use cases.
 
 [ ] Library Review: check for playlists with duplicate names and tracklists, indicating possible overlap. Sort by smallest playlists?
 [ ] Similarity module launcher? Stay on page, run overlap check against reference set, render results as playlistIDs with a 'stats' object: # overlap, % overlap, object reference. Doubles as a a "find playlists with track" feature, give option to search by song?

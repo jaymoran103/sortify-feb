@@ -27,15 +27,18 @@ let stableOrder = [];           // Array of all trackIDs in first-seen order, us
 let cachedFilteredIDs = null;   // Array representing a filtered subset of stableOrder for the current filter. Reset when filter changes or track set changes.
 
 // Column width: stored to apply consistent widths across renders, and allow user resizing.
-const TRACK_INDEX_WIDTH = 75;
-const TRACK_INFO_DEFAULT = 220;
-const TRACK_INFO_MIN = 140;
-const TRACK_INFO_MAX = 440;
-const PLAYLIST_COLUMN_MIN = 50;
+const INDEX_COLUMN_WIDTH = 75;
+
+const TRACK_COLUMN_MIN = 200;
+const TRACK_COLUMN_TARGET = 250;
+const TRACK_COLUMN_MAX = 500;
+
+const PLAYLIST_COLUMN_MIN = 100;
+const PLAYLIST_COLUMN_TARGET = 200;
 const PLAYLIST_COLUMN_MAX = 500;
 
 let playlistColumnMode = "auto"; // "auto" determines width based on container and playlist count; "manual" uses playlistColumnWidth
-let playlistColumnWidth = 50;  // px — applied as CSS variable on the table element, consumed by .track-table__checkbox
+let playlistColumnWidth = PLAYLIST_COLUMN_TARGET;  // px — applied as CSS variable on the table element, consumed by .track-table__checkbox
 
 // Selection state: stored trackID(s) of currently selected row(s), and index of last clicked row for shift-click range selection.
 let selectedTrackIDs = new Set();
@@ -214,7 +217,7 @@ function setupEventListeners() {
         clearTimeout(resizeTimer);
         resizeTimer = setTimeout(() => {
             if (playlistColumnMode === "auto") {
-                applyPlaylistColumnWidth();
+                updateColumnWidths();
             }
         }, 100);
     });
@@ -316,7 +319,7 @@ function renderTableHeader(){
     thead.appendChild(row);
 
     // Apply current column width (th cells are recreated each render, so var must be re-set)
-    applyPlaylistColumnWidth();
+    updateColumnWidths();
 }
 
 // Renders body of workspace table.
@@ -529,8 +532,6 @@ function collectTrackIDsInOrder(playlists){
     }
     return allTrackIDs;
 }
-
-
 
 /** ==================
  *  CONTROLS
@@ -828,77 +829,120 @@ async function handleSetColumnWidth() {
     if (result !== null) {
         playlistColumnMode = "manual";
         playlistColumnWidth = parseInt(result, 10);
-        applyPlaylistColumnWidth();
+        updateColumnWidths();
     }
+}
+
+// Tries a series of width allocations, returning the best available pair.
+// Key detail here is that track column goes back to target width if the minimum pair doesnt fit
+// Looks overengineered, but this flow seems worth keeping for debuggability and flexibility to include the min,min -> fail -> target case where minimum widths exceed space, and 
+function computeAutoWidths(){
+
+    //Get width and available space
+    const tableContainer = document.getElementById("workspace-container");
+    const containerWidth = tableContainer ? tableContainer.clientWidth : 0;
+
+    const available = containerWidth - INDEX_COLUMN_WIDTH;
+    const playlistCount = playlists.length;
+
+    // Case 1: If target widths fit, use them.
+    const totalTarget = TRACK_COLUMN_MAX + (playlistCount * PLAYLIST_COLUMN_TARGET);
+    if (totalTarget <= available) {
+        console.log("Case 1: all target widths fit");
+        return { trackWidth: TRACK_COLUMN_MAX, playlistWidth: PLAYLIST_COLUMN_TARGET };
+    }
+
+    // Case 2: If target track width + playlist minimums fit, use target track width and divide remaining space among playlists.
+    const totalTrackTarget_PlaylistMin = TRACK_COLUMN_TARGET + (playlistCount * PLAYLIST_COLUMN_MIN);
+    if (totalTrackTarget_PlaylistMin <= available) {
+        console.log("Case 2: target track width fits with playlist minimums");
+        const playlistWidth = clamp((available - TRACK_COLUMN_TARGET) / playlistCount, PLAYLIST_COLUMN_MIN, PLAYLIST_COLUMN_MAX);
+        return { trackWidth: TRACK_COLUMN_TARGET, playlistWidth: playlistWidth };
+    }
+
+    // Case 3: If minimum track width + playlist minimums fit, use them.
+    const totalTrackMin_PlaylistMin = TRACK_COLUMN_MIN + (playlistCount * PLAYLIST_COLUMN_MIN);
+    if (totalTrackMin_PlaylistMin <= available) {
+        console.log("Case 3: minimum track width fits with playlist minimums");
+        const playlistWidth = clamp((available - TRACK_COLUMN_MIN) / playlistCount, PLAYLIST_COLUMN_MIN, PLAYLIST_COLUMN_MAX);
+        return { trackWidth: TRACK_COLUMN_MIN, playlistWidth: playlistWidth };
+    }
+
+    // Case 4: If even minimums don't fit, use minimums and allow overflow.
+    console.log("Case 4: not even minimum widths fit, using minimums and allowing overflow");
+    return {trackWidth: TRACK_COLUMN_MIN, playlistWidth: PLAYLIST_COLUMN_MIN};
+
 }
 
 function handleAutoFitColumnWidth() {
     playlistColumnMode = "auto";
-    applyPlaylistColumnWidth();
+    updateColumnWidths();
 }
 
-function computeAutoPlaylistWidth() {
+// Doesnt compute anything, keeping for convention
+function computeMinWidths(){
+    return {trackWidth: TRACK_COLUMN_MIN, playlistWidth: PLAYLIST_COLUMN_MIN};
+}
+
+// Determine correct display widths for manually sized columns.
+function computeManualWidths(){
+    //Determine total available window space
     const tableContainer = document.getElementById("workspace-container");
     const containerWidth = tableContainer ? tableContainer.clientWidth : 0;
 
-    // If table columns already exist in DOM, measure their actual rendered width
-    // (table-layout: fixed may still include cell borders, padding, etc.).
-    const indexCell = document.querySelector('#workspace-table th.track-table__index');
-    const infoCell = document.querySelector('#workspace-table th.track-table__info');
+    const available = containerWidth - INDEX_COLUMN_WIDTH;
+    const playlistCount = playlists.length;
 
-    const indexWidth = indexCell ? indexCell.getBoundingClientRect().width : TRACK_INDEX_WIDTH;
-    const infoWidth = infoCell ? infoCell.getBoundingClientRect().width : TRACK_INFO_DEFAULT;
+    //Determine available space after playlist columns take allotted space.
+    const availableAfterPlaylists = available - (playlistCount * playlistColumnWidth);
 
-    const borderAndPadding = 16; // fallback “waste” for padding/margins/borders (should be small)
-    const available = Math.max(0, containerWidth - indexWidth - infoWidth - borderAndPadding);
-    const playlistCount = Math.max(1, playlists.length);
-    const target = Math.floor(available / playlistCount);
+    //If remaining space can accomodate track info at its target width, set to target width.
+    if (availableAfterPlaylists >= TRACK_COLUMN_MAX) {
+        console.log("Case 1: Max fits, using max");
+        return { trackWidth: TRACK_COLUMN_MAX, playlistWidth: playlistColumnWidth };
+    } 
 
-    return Math.max(PLAYLIST_COLUMN_MIN, Math.min(target, PLAYLIST_COLUMN_MAX));
+    // Try target width
+    else if (availableAfterPlaylists >= TRACK_COLUMN_TARGET) {
+        console.log("Case 2: Target fits, using target");
+        return { trackWidth: TRACK_COLUMN_TARGET, playlistWidth: playlistColumnWidth };
+    } 
+    
+    // Try minimum widths
+    else if (availableAfterPlaylists >= TRACK_COLUMN_MIN) {
+        console.log("Case 3: Minimum fits, using minimum");
+        return { trackWidth: TRACK_COLUMN_MIN, playlistWidth: playlistColumnWidth };
+    } 
+    
+    // If even the minimum widths won't fit, use TARGET since scrolling will happen anyway
+    else {
+        console.log("Case 4: Minimum didn't fit, using target since scrolling will happen anyway");
+        return { trackWidth: TRACK_COLUMN_TARGET, playlistWidth: playlistColumnWidth };
+    }
+    //Otherwise, provide minimum width and allow overflow. 
 }
 
-// Push current playlist column width to the CSS custom property on the table element.
-// If in auto mode, the width is computed from current container and playlist count.
-function computeTrackInfoWidth(playlistColumnWidth) {
-    const tableContainer = document.getElementById("workspace-container");
-    const containerWidth = tableContainer ? tableContainer.clientWidth : 0;
-    const occupied = TRACK_INDEX_WIDTH + (playlists.length * playlistColumnWidth) + 16; // table padding/borders fudge
-    const remaining = Math.max(0, containerWidth - occupied);
-    return Math.max(TRACK_INFO_MIN, Math.min(remaining, TRACK_INFO_MAX));
-}
-
-function applyPlaylistColumnWidth() {
-    const width = playlistColumnMode === "auto" ? computeAutoPlaylistWidth() : playlistColumnWidth;
-    const trackInfoWidth = computeTrackInfoWidth(width);
+function updateColumnWidths() {
+    const computedWidths = playlistColumnMode === "auto" ? computeAutoWidths() : computeManualWidths();
 
     const table = document.getElementById('workspace-table');
     if (!table) return;
 
-    // Apply uniform width to all playlist columns and track info via CSS variables.
-    table.style.setProperty('--playlist-col-width', width + 'px');
-    table.style.setProperty('--track-info-width', trackInfoWidth + 'px');
-    table.style.width = "auto"; // Let the table overflow horizontally if needed
-
+    // Apply computed widths via CSS variables.
+    table.style.setProperty('--playlist-col-width', computedWidths.playlistWidth + 'px');
+    table.style.setProperty('--track-info-width', computedWidths.trackWidth + 'px');
+    
     // Keep the table's minimum consistent with the target widths so columns don't automatically redistribute.
-    const totalWidth = TRACK_INDEX_WIDTH + trackInfoWidth + (playlists.length * width);
+    const totalWidth = INDEX_COLUMN_WIDTH + computedWidths.trackWidth + (playlists.length * computedWidths.playlistWidth);
+    
+    table.style.width = `${totalWidth}px`;
     table.style.minWidth = `${totalWidth}px`;
 
-    // Force existing playlist columns to uniform width.
-    document.querySelectorAll('#workspace-table .track-table__checkbox').forEach(cell => {
-        cell.style.width = `${width}px`;
-        cell.style.minWidth = `${width}px`;
-        cell.style.maxWidth = `${width}px`;
-    });
-
-    // Force track info header and cells to computed width.
-    document.querySelectorAll('#workspace-table th.track-table__info, #workspace-table td.track-table__info').forEach(cell => {
-        cell.style.width = `${trackInfoWidth}px`;
-        cell.style.minWidth = `${TRACK_INFO_MIN}px`;
-        cell.style.maxWidth = `${TRACK_INFO_MAX}px`;
-    });
 }
 
-
+function clamp(value, min, max) {
+    return Math.max(min, Math.min(value, max));
+}
 // Returns items array [{ label, action } | { divider: true }] for the given dropdown mode.
 // Handles "track" -> "track-multi" upgrade and empty-selection guard internally.
 function buildDropdownItems(mode, id) {
@@ -1341,7 +1385,6 @@ async function handleAddToWorkspace() {
     }
 }
 
-
 /** ==================
  *  SELECTION
  *  ==================
@@ -1428,7 +1471,6 @@ function handleShiftClick(currentIndex, currentTrackID, rowEl) {
     }
     // Shift+click doesn't move the anchor — lastClickedTrackIndex stays put
 }
-
 
 // Select all tracks in the current filtered+sorted set, across all pages.
 function handleCmdA() {

@@ -119,7 +119,7 @@ const _modal = new ModalController();
 // Open a text-input modal. Returns the trimmed input string, or null if cancelled/dismissed/empty.
 // args: title, confirmLabel, cancelLabel, defaultValue, placeholder, validate(value) => errorMessage or null
 export function promptModal({ title, confirmLabel = "OK", cancelLabel = "Cancel", defaultValue = "", placeholder = "", validate, message=null} = {}) {
-    console.warn("Given message: ", message);
+    // console.warn("Given message: ", message);
     let inputEl, errorEl;
 
     // Try to confirm: validate input if validator provided, showing inline error if invalid. 

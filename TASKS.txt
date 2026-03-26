@@ -1,41 +1,27 @@
 #TASKS
 
-# TODO:
-[x] Fix "Fetching" string bug for onprogress display
-[x] Make progress display flash when a process starts, so user doesnt miss visual update after click spotify option in modals
-[x] Limit onprogress height to one line, shorten string as needed. 
-    [x] Keep playlist count in corner 
-    [x] Make onProgress bar measure progress through total tracks, not total playlists. Updating on every 50 instead of on playlist completion will look smoother and more meaningful.
-
-# CSS Consistency Pass
-    [x] consistent surfaces
-    [x] soft borders
-    [x] hover effects
-    [x] button colors
-    [x] modal properties, button designations
 
 # WORKSPACE
 [x] Column reordering
 [x] Column width adjust
 [x] Enforce element widths
-[ ] Warning before launching: 10+ playlists won't look ideal. "I understand" to continue.
+[x] Warning before launching: 10+ playlists won't look ideal. "I understand" to continue.
 [x] "Open in spotify"/"Copy Link" for playlist dropdowns. 
-[ ] multi-toggle for membership update on multi-selected track group?
+[-] multi-toggle for membership update on multi-selected track group?
 [x] "Add Tracks" option? sorted to bottom until resorted with playlist membership
 
 
 - Add simple README outlining workspace architecture and use. Light on dashboard details, will elaborate once its fleshed out.
 
 # DASHBOARD
-- Make dashboard iteration 3.
+[x] Make dashboard iteration 3.
     [x] Widgets: I/O, Library, Workspace.
-        [ ] Workspace widget: show recent selections, button to reopen.
-        [ ] Library widget: option to search by tracks?
-        [ ] Extra Widget: Similarity Stub: Check against reference set and jaccard overlap
+        [x] Library widget: option to search by tracks?
     [x] Modals: Import Playlists, Export Playlists, Select Workspace Playlists, Help
         [x] Selection Modals: Select all button, sort selected tracks to top on empty search.
         [x] Selection Modals: Sort options for playlists: track count, recent, name
-    -- Add README with general app overview
+
+[ ] Add README with general app overview
 
 [x] Link spotify API, manager for I/O and rate limit in adapters  limit with query queue in dashboard I/O widget
 
@@ -48,6 +34,8 @@
 [x] Data Layer: Support more imported track fields?
 - Stub for similarity module with just name/duration comparison? Honestly BPM could win the day
 - Basic module for libary management? Could just offer a better view (simple collapsing views with robust sort/search went a long way) and option to open selections in workspace.
+[ ] Workspace widget: show recent selections, button to reopen.
+[ ] Extra Widget: Similarity Stub: Check against reference set and jaccard overlap
 
 
 
@@ -66,3 +54,16 @@
     -- add comments to separate sections and make hierarchies clear, 
     -- consolidate redundant styling where possible,
     -- eliminate conflicts, unintentional overrulings.
+
+[x] Fix "Fetching" string bug for onprogress display
+[x] Make progress display flash when a process starts, so user doesnt miss visual update after click spotify option in modals
+[x] Limit onprogress height to one line, shorten string as needed. 
+    [x] Keep playlist count in corner 
+    [x] Make onProgress bar measure progress through total tracks, not total playlists. Updating on every 50 instead of on playlist completion will look smoother and more meaningful.
+
+# CSS Consistency Pass
+    [x] consistent surfaces
+    [x] soft borders
+    [x] hover effects
+    [x] button colors
+    [x] modal properties, button designations

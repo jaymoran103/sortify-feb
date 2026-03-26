@@ -232,7 +232,7 @@ body {
 /* ========== TABLE COLUMNS ========== */
 
 .track-table__index {
-    width: 75px; /* Should be consistent with TRACK_INDEX_WIDTH in workspace.js */
+    width: 75px; /* Should be consistent with INDEX_COLUMN_WIDTH in workspace.js */
     max-width: 75px;
     text-align: center;
     white-space: nowrap;
@@ -272,7 +272,7 @@ body {
 .track-table__checkbox {
     font-size: var(--font-size-base);
     width: var(--playlist-col-width, 100px); /* overridden at runtime via table style property */
-    min-width: 50px; /* Should be consistent with PLAYLIST_COLUMN_MIN in workspace.js */
+    min-width: 100px; /* Should be consistent with PLAYLIST_COLUMN_MIN in workspace.js */
     max-width: 500px; /* Should be consistent with PLAYLIST_COLUMN_MAX in workspace.js */
     text-align: center;
     white-space: normal;
