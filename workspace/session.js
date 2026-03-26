@@ -22,6 +22,7 @@ export class WorkspaceSession {
         this.dataManager = null;
     }
 
+
     /** ==================
      *  DATA LOADING
      *  ==================
@@ -82,6 +83,17 @@ export class WorkspaceSession {
         );
     }
 
+
+    //Persist current session state to sessionStorage, ensuring changes to the playlist set are reflected across reloads.
+    //Called after any operation that modifies playlist ids in the session (add/remove/duplicate/create). Renaming doesn't affect playlistIDs so it doesn't trigger a persist.
+    persistSession(){
+        const playlistIds = this.playlists.map(p => p.id);
+        const session = { playlistIds, timestamp: new Date().toISOString() };
+        console.log("Updating workspaceSession with playlists:", playlistIds);
+        sessionStorage.setItem("workspaceSession", JSON.stringify(session));
+        // window.location.href = "workspace/workspace.html";
+    }
+
     // Create augmented playlist object with session-layer fields: playlistID (as string), trackIDs (array), trackIDSet (Set). 
     // Input playlist is not mutated.
     augmentPlaylist(pl) {
@@ -127,6 +139,8 @@ export class WorkspaceSession {
             console.log(`addPlaylist: appended ${novelTracks.filter(Boolean).length} novel tracks from '${raw.name}'`);
         }
 
+        // Persist updated playlist set to sessionStorage
+        this.persistSession();
         return augmented;
     }
 
@@ -143,6 +157,9 @@ export class WorkspaceSession {
         //check if playlist was pending. If so, remove from pending list
         const pendingIdx = this.pendingPlaylists.findIndex(p => p.playlistID === playlistID);
         if (pendingIdx !== -1) this.pendingPlaylists.splice(pendingIdx, 1);
+
+        // Persist updated playlist set to sessionStorage
+        this.persistSession();
     }
 
     // Rename a playlist in-memory. Updates in IDB on next save()
@@ -175,6 +192,10 @@ export class WorkspaceSession {
         };
         this.playlists.push(newPl);
         this.pendingPlaylists.push(newPl);
+
+        // Persist updated playlist set to sessionStorage
+        this.persistSession();
+
         return newPl;
     }
 
@@ -191,6 +212,10 @@ export class WorkspaceSession {
         };
         this.playlists.push(newPl);
         this.pendingPlaylists.push(newPl);
+
+        // Persist updated playlist set to sessionStorage
+        this.persistSession();
+        
         return newPl;
     }
 
