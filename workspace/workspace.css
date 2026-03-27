@@ -1,4 +1,7 @@
 
+@import '../shared/base.css';
+@import '../shared/components.css';
+
 /* Workspace-specific styles. Tokens in shared/base.css, shared components in shared/components.css */
 
 
@@ -17,24 +20,6 @@ body {
 }
 
 /* ========== PAGE STRUCTURE ========== */
-
-/* Page Header */
-#workspace-header {
-    display: flex;
-    align-items: center;
-    gap: 20px;
-    padding: 10px 20px;
-    background-color: var(--color-header-page);
-    flex-shrink: 0;
-    border-bottom: var(--border-standard);
-    height: 60px;
-}
-
-#workspace-header h1 {
-    flex: 1;
-    margin: 0;
-    font-size: 1.5rem;
-}
 
 /* Save Controls */
 #save-controls {
@@ -107,7 +92,7 @@ body {
     display: flex;
     /* align-items intentionally omitted — allows controls to align to top if bar wraps */
     gap: 16px;
-    padding: 8px 16px;
+    padding: 8px 28px;
     background-color: var(--color-header-page);
     border-bottom: var(--border-standard);
     flex-shrink: 0;

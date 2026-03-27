@@ -15,42 +15,6 @@ body {
     padding: 0;
 }
 
-/* ========== HEADER ========== */
-
-.header {
-    position: sticky;
-    top: 0;
-    z-index: 10;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    height: 46px;
-    background: var(--color-header-page);
-    border-bottom: var(--border-standard);
-    padding: 0 28px;
-    flex-shrink: 0;
-}
-
-.header-wordmark {
-    font-size: 1.15em;
-    font-weight: 700;
-    color: var(--color-text);
-    letter-spacing: 0.03em;
-}
-
-.header-sep {
-    color: var(--color-text-muted);
-}
-
-.header-page-title {
-    color: var(--color-text-muted);
-    font-size: 0.9em;
-}
-
-.header-spacer {
-    flex: 1;
-}
-
 /* ========== PAGE BODY & CARDS ROW ========== */
 
 .page-body {
@@ -60,7 +24,7 @@ body {
 }
 
 .cards-row {
-    max-width: 1100px;
+    max-width: 90vw;
     margin: 0 auto;
     display: flex;
     gap: 14px;
@@ -74,6 +38,8 @@ body {
     height: var(--card-height);
     background: var(--color-surface);
     border: var(--border-soft);
+    border-radius: 8px;
+
     display: flex;
     flex-direction: column;
     overflow: hidden;
@@ -116,6 +82,7 @@ body {
 .library-stats {
     padding: 20px 16px;
     border-top: var(--border-soft);
+    border-radius: 8px;
     display: flex;
     flex-wrap: wrap;
     gap: 12px;

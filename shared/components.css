@@ -3,6 +3,66 @@
    Imported by both surfaces via their respective surface CSS files. */
 
 
+
+/* ========== HEADER ========== */
+
+.sortify-header {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    display: flex;
+    align-items: center;
+    
+    background: var(--color-header-page);
+    border-bottom: var(--border-standard); 
+
+    flex-shrink: 0;
+
+    height: 64px; /*Workspace header
+    /* height: 46px; */
+
+    /* padding: 10px 20px; */ /*Workspace header */
+    padding: 28px;
+
+    /*gap: 20px; /*Workspace header */
+    gap: 10px;
+}
+
+.header-wordmark {
+    color: #b9b9b9;
+    font-size: 1.4em;
+
+    /* font-size: 1.25rem; */
+    /* font-size: 1.5em; */
+    font-weight: 700;
+    /* letter-spacing: 0.03em; */
+    /* flex: 1;  */     /*Workspace header */
+    /* margin: 0; */
+}
+.header-wordmark:hover {
+    color: #fff;
+    cursor: pointer;
+    /* font-weight: 900; */
+    /* text-decoration: none; */
+}
+
+.header-sep {
+    color: var(--color-text-muted);
+}
+
+.header-page-title {
+    color: var(--color-text-muted);
+    font-size: 1.1em;
+
+    /* font-size: 0.9em; */
+}
+/* 
+.header-spacer {
+    flex: 1;
+} */
+
+
+
 /* ========== BUTTONS ========== */
 
 /* Global button{} default is a catch-all, remove during refactor */
@@ -32,7 +92,6 @@ button:hover:not(:disabled) {
 .btn--cancel  { background-color: var(--color-button-cancel); }
 .btn--danger  { background-color: var(--color-error);         color: var(--color-button-text); }
 .btn--full    { width: 100%; }
-
 
 /* ========== MODAL ========== */
 
@@ -101,6 +160,34 @@ button:hover:not(:disabled) {
     gap: 8px;
 }
 
+w
+/* ========== IMPORT REPORT MODAL ========== */
+
+.import-report__section {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    border-top: var(--border-standard);
+    padding-top: 8px;
+}
+
+.import-report__category {
+    font-size: var(--font-size-controls);
+    font-weight: 600;
+    color: var(--color-text);
+    margin: 0;
+}
+
+.import-report__list {
+    margin: 0;
+    padding-left: 16px;
+    color: var(--color-text-muted, var(--color-text));
+    font-size: var(--font-size-controls);
+}
+
+.import-report__list li {
+    margin-bottom: 2px;
+}
 
 /* ========== MODAL STYLING ========== */
 

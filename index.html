@@ -2,12 +2,14 @@
 <html lang="en">
 <head>
     <meta charset="utf-8">
-    <title>Sortify</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Sortify - Dashboard</title>
     <link rel="stylesheet" href="dashboard.css">
 </head>
 <body>
+    
     <!-- Header: Provides navigation and page title -->
-    <header class="header">
+    <header class="sortify-header">
         <span class="header-wordmark">Sortify</span>
         <span class="header-sep">/</span>
         <span class="header-page-title">Dashboard</span>
@@ -80,6 +82,19 @@
                 <div class="ws-body">
                     <p class="card-desc">Select a set of playlists to open for side-by-side track editing.</p>
                     <button class="btn--full" id="open-workspace-btn">Select Playlists</button>
+                </div>
+            </div>
+
+
+            <!-- Similarity Card: Provides button to open similarity module or run single-reference analysis. -->
+            <div class="card">
+                <div class="card-header">
+                    <span class="card-title">Overlap Analysis</span>
+                </div>
+                <div class="ws-body">
+                    <p class="card-desc">Analyze overlap with a specific playlist, or review your whole library</p>
+                    <button class="btn--full" id="simlarity-refscan-btn">Compare Playlist</button>
+                    <button class="btn--full" id="similarity-module-btn">Analyze Library</button>
                 </div>
             </div>
 

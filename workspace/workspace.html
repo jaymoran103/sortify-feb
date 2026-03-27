@@ -1,25 +1,30 @@
-<html>
+<!DOCTYPE html>
+<html lang="en">
     <head>
         <meta charset="utf-8">
-        <title>Playlist Workspace</title>
-        <link rel="stylesheet" href="../shared/base.css">
-        <link rel="stylesheet" href="../shared/components.css">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <title>Sortify - Playlist Workspace</title>
         <link rel="stylesheet" href="workspace.css">
     </head>
     <body>
 
         <!-- Header with title, navigation and save controls -->
-        <header id="workspace-header">
+        <header class="sortify-header">
 
-            <h1>Playlist Workspace</h1>
+            <span class="header-wordmark" id="header-wordmark" onclick="window.location.href='../'">Sortify</span>
+            <span class="header-sep">/</span>
+            <span class="header-page-title">Workspace</span>
+
+            <div class="header-spacer"></div>
 
             <div id="save-controls">
                 <span id="save-status"></span>
                 <button id="save-btn" disabled>Save</button>
-            </div>
-            <button id="back-btn" onclick="window.location.href='../'"> Back to Dashboard</button> <!-- onclick here so navigation doesn't rely on JS-->
-        </header>
+                <button id="back-btn" onclick="window.location.href='../'"> Back to Dashboard</button> <!-- onclick here so navigation doesn't rely on JS-->
 
+            </div>
+        </header>
+            
         <!-- Progress bar for load operations -->
         <div id="progress-bar"></div>
 
@@ -38,7 +43,7 @@
             <span id="selection-counter"></span>
             <!-- Single controls button opens a menu modal -->
             <div id="playlist-controls">
-                <button id="add-workspace-btn">+ Add to workspace</button>
+                <button id="add-workspace-btn">+ Add Content</button>
             </div>
         </div>
 

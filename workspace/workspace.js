@@ -167,14 +167,32 @@ async function yieldForPaint(){
 // Set up event listeners for checkboxes and buttons. Called once in init()
 function setupEventListeners() {
 
-    //Basic button listeners for save and back.
-    document.getElementById("save-btn").addEventListener("click", handleSave);
+    
+    // HEADER
+
+    //Replace wordmark onclick with listener, ensuring navigation is preceded by a save check.
+    const headerWordmark = document.getElementById("header-wordmark");
+    console.log(headerWordmark);
+    console.table(headerWordmark);
+
+    headerWordmark.onclick = null; // clear the existing onclick listener, ensuring use of this link after the page renders will use the proper handleBackButton() method, subject to checks and save warnings before returning to the dashboard.
+    headerWordmark.addEventListener("click", handleBackButton);
+
+    //Replace back button onclick with listener, ensuring navigation is preceded by a save check.
     const backBtn = document.getElementById("back-btn");
     backBtn.onclick = null; // clear the existing onclick listener, ensuring use of this button after the page renders will use the proper handleBackButton() method, subject to checks and save warnings before returning to the dashboard.
     backBtn.addEventListener("click", handleBackButton);
     
+    //Set listener for save button
+    document.getElementById("save-btn").addEventListener("click", handleSave);
+
+    // CONTROL BAR
+
     // Playlist management button (single entrypoint)
     document.getElementById("add-workspace-btn").addEventListener("click", handleAddToWorkspace);
+
+
+    // TABLE
 
     // For any checkbox change in the table body, handle toggle with reference to the event target
     document.getElementById("table-body").addEventListener("change", (e) => {
@@ -201,13 +219,21 @@ function setupEventListeners() {
 
     // Keyboard shortcuts: Escape closes dropdown; Cmd+A / Ctrl+A selects all tracks
     document.addEventListener("keydown", (e) => {
+
+        // ESC: close dropdown is open, clear selection
         if (e.key === "Escape") {
             dropdownMenu.close();
             clearSelection();
         }
+        // Cmd+A: select all tracks in current display list. Prevent default text selection behavior.
         if ((e.metaKey || e.ctrlKey) && e.key === "a") {
-            e.preventDefault(); // prevent browser "select all text"
+            e.preventDefault(); // prevent default text selection
             handleCmdA();
+        }
+        // Cmd+S: trigger save. Prevent default "save webpage" behavior.
+        if ((e.metaKey || e.ctrlKey) && e.key === "s") {
+            e.preventDefault(); //Prevent default browser save dialog
+            handleSave();
         }
     });
 
@@ -1367,7 +1393,8 @@ async function handleAddTrackToWorkspace() {
 
 async function handleAddToWorkspace() {
     const action = await menuModal({
-        title: "Add to Workspace",
+        // title: "Add to Workspace",//TODO Settle on wording
+        title: "Add Content to Workspace",
         choices: [
             { label: "Add existing playlist", value: "add-playlist" },
             { label: "Create new playlist", value: "new-playlist" },
