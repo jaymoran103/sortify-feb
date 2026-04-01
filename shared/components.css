@@ -296,6 +296,10 @@ button.modal__btn--danger:hover {
     color: var(--color-text-muted);
     font-size: 0.85em;
     flex-shrink: 0;
+    min-width: 128px;          
+    text-align: right;
+    font-variant-numeric: tabular-nums; /* easier visual number alignment */
+    white-space: nowrap;
 }
 
 .modal__list-empty {

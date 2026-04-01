@@ -11,9 +11,12 @@ import spotifyAuthManager from "./shared/spotifyAuthManager.js";
 import spotifyImportAdapter from "./shared/adapters/spotifyImportAdapter.js";
 import spotifyExportAdapter from "./shared/adapters/spotifyExportAdapter.js";
 
-import { menuModal, notifyModal, warningModal, playlistSelectModal, spotifyPlaylistSelectModal } from "./shared/modal.js";
+import { menuModal, notifyModal, warningModal, playlistSelectModal, spotifyPlaylistSelectModal, overlapResultsModal } from "./shared/modal.js";
 import { matchesTrackSearch, matchesPlaylistSearch, sortTrackIDs } from "./shared/trackUtils.js";
 import { dropdownMenu } from "./shared/dropdown.js";
+
+import {scanWithReference} from "./similarity/similarityUtils.js";
+
 
 class DashboardApp {
 
@@ -61,10 +64,13 @@ class DashboardApp {
     }
 
     addEventListeners() {
+
+        // I/O CARD
         document.getElementById("import-btn").addEventListener("click", this.handleImport.bind(this));
         document.getElementById("export-btn").addEventListener("click", this.handleExport.bind(this));
-        document.getElementById("open-workspace-btn").addEventListener("click", this.handleOpenWorkspace.bind(this));
 
+
+        // LIBRARY CARD
         this.setupLibraryControls();
 
         document.getElementById("library-view-select").addEventListener("change", (e) => {
@@ -89,6 +95,13 @@ class DashboardApp {
                 this.renderLibrary();
             });
         }
+
+        // WORKSPACE CARD
+        document.getElementById("open-workspace-btn").addEventListener("click", this.handleOpenWorkspace.bind(this));
+
+        // SIMILARITY CARD
+        document.getElementById("simlarity-refscan-btn").addEventListener("click", this.handleReferenceScan.bind(this));
+        // document.getElementById("similarity-module-btn").addEventListener("click", this.handleOpenSimilarityModule.bind(this));
     }
 
     // ====== I/O CARD ==========================================
@@ -752,6 +765,72 @@ class DashboardApp {
         await notifyModal({ title: "Coming Soon", message: `${featureName} is not yet available.` });
     }
 
+
+
+
+    // ====== SIMILARITY CARD ==========================================
+
+
+    // Select reference playlists, run overlap scan, show results modal.
+    // If user clicks "Open in Workspace" on results, opens workspace with the shown playlists.
+    async handleReferenceScan() {
+        // Load playlists
+        let playlists;
+        try {
+            playlists = await this.dataManager.getAllRecords("playlists");
+        } catch (err) {
+            console.error("Failed to load playlists for overlap scan:", err);
+            return;
+        }
+
+        if (!playlists || playlists.length === 0) {
+            await notifyModal({ title: "No Playlists", message: "Import some playlists first." });
+            return;
+        }
+
+        // Let user pick which playlist(s) to use as the reference
+        const referenceIds = await playlistSelectModal({
+            title:        "Select Reference Playlists",
+            confirmLabel: "Scan",
+            playlists,
+            offerSelectAll: false
+        });
+        if (!referenceIds || referenceIds.length === 0) return;
+
+        // Build reference track set from all selected playlists
+        const referenceSet = buildReferenceSet(referenceIds, playlists);
+
+        // Run scan against all playlists, filter to those with at least one match
+        const rawResults  = scanWithReference(referenceSet, playlists);
+        const results     = Object.values(rawResults)
+            .filter(r => r.totalMatch > 0)
+            .sort((a, b) => b.totalMatch - a.totalMatch || b.percentRef - a.percentRef);
+
+        // Label for the modal title — comma-joined names of selected reference playlists
+        const referenceLabel = referenceIds
+            .map(id => playlists.find(p => p.id === id)?.name ?? "?")
+            .join(", ");
+
+        // Show results; returns array of IDs to open if user clicks "Open in Workspace", else null
+        const openIds = await overlapResultsModal({ results, referenceLabel });
+        if (openIds && openIds.length > 0) {
+            this.openWorkspaceWithPlaylists(openIds);
+        }
+    }
+
+    // Build a unified Set<trackID> from the given playlist IDs and the full playlists array.
+    buildReferenceSet(playlistIds, playlists) {
+        const set = new Set();
+
+        // For each playlist ID, find the playlist object, then add each of its trackIDs to the set. 
+        // This results in a single set of unique trackIDs across all selected reference playlists.
+        for (const id of playlistIds) {
+            const pl = playlists.find(p => p.id === id);
+            if (!pl || !Array.isArray(pl.trackIDs)) continue;
+            for (const trackID of pl.trackIDs) set.add(trackID);
+        }
+        return set;
+    }
 }
 
 const app = new DashboardApp();

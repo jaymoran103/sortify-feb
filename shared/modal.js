@@ -283,11 +283,14 @@ function _openSelectModal({ title,
         label.appendChild(nameSpan);
 
         // Count column is optional — omit if getCount returns null.
+        // If getCount returns a string, use it verbatim; if a number, apply "N tracks" format.
         const count = getCount(item);
         if (count !== null) {
             const countSpan       = document.createElement("span");
             countSpan.className   = "modal__list-row-count";
-            countSpan.textContent = `${count} track${count !== 1 ? "s" : ""}`;
+            countSpan.textContent = typeof count === "string"
+                ? count
+                : `${count} track${count !== 1 ? "s" : ""}`;
             label.appendChild(countSpan);
         }
 
@@ -333,6 +336,12 @@ function _openSelectModal({ title,
                     return (a.artist || "").localeCompare(b.artist || "");
                 case "album":
                     return (a.album || "").localeCompare(b.album || "");
+                case "totalMatch":
+                    return (b.totalMatch ?? 0) - (a.totalMatch ?? 0);
+                case "percentRef":
+                    return (b.percentRef ?? 0) - (a.percentRef ?? 0);
+                case "percentTarget":
+                    return (b.percentTarget ?? 0) - (a.percentTarget ?? 0);
                 default:
                     return 0;
             }
@@ -553,6 +562,32 @@ export function trackSelectModal({ title = "Select Tracks", confirmLabel = "Add"
         searchPlaceholder: "Search tracks\u2026",
         sortOptions:        TRACK_SORT_OPTIONS,
         sortSelected:       true,
+    });
+}
+
+
+// Display overlap scan results as a selectable list, reusing the standard list-picker modal.
+// results: array of { id, name, totalMatch, percentRef, percentTarget }, pre-sorted
+// referenceLabel: short string shown in the title
+// Returns selected playlist IDs if user clicks "Open in Workspace", or null if dismissed.
+export function overlapResultsModal({ results = [], referenceLabel = "reference" } = {}) {
+    return _openSelectModal({
+        title:             `Overlap: ${referenceLabel}`,
+        confirmLabel:      "Open in Workspace",
+        cancelLabel:       "Close",
+        items:             results,
+        getID:             r => r.id,
+        // Normalized styling: pad numeric fields for consistent alignment.
+        getCount:          r => `${String(r.totalMatch).padStart(3, ' ')} overlap · ${r.percentTarget.toFixed(0).padStart(3, ' ')}%`,
+        searchPlaceholder: "Search playlists\u2026",
+        sortOptions: [
+            { value: "totalMatch",    label: "# Matches" },
+            { value: "percentTarget", label: "% Overlap" },
+            { value: "percentRef",    label: "% of Reference" },
+            { value: "name",          label: "Name" },
+        ],
+        sortSelected:   false,
+        offerSelectAll: true,
     });
 }
 
