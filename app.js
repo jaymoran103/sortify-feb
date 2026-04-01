@@ -99,8 +99,8 @@ class DashboardApp {
         document.getElementById("open-workspace-btn").addEventListener("click", this.handleOpenWorkspace.bind(this));
 
         // SIMILARITY CARD
-        document.getElementById("simlarity-refplaylists-btn").addEventListener("click", this.handleSimilarityReferencePlaylists.bind(this));
-        document.getElementById("simlarity-reftracks-btn").addEventListener("click", this.handleSimilarityReferenceTracks.bind(this));
+        document.getElementById("simlarity-refplaylists-btn").addEventListener("click", () => this.handleSimilarityReferenceScan('playlist'));
+        document.getElementById("simlarity-reftracks-btn").addEventListener("click", () => this.handleSimilarityReferenceScan('track'));
         // document.getElementById("similarity-module-btn").addEventListener("click", this.handleOpenSimilarityModule.bind(this));
     }
 
@@ -771,34 +771,51 @@ class DashboardApp {
     // ====== SIMILARITY CARD ==========================================
 
 
-    // Select reference playlists, run overlap scan, show results modal.
-    // If user clicks "Open in Workspace" on results, opens workspace with the shown playlists.
-    async handleSimilarityReferencePlaylists() {
-        // Load playlists
-        let allPlaylists;
+    
+    async handleSimilarityReferenceScan(mode = 'playlist') {
+
+        console.log("Sharing is caring");
+        //Ensure mode is valid
+        if (mode !== 'playlist' && mode !== 'track') {
+            console.warn(`Unknown mode for handleSimilarityReferenceScan: ${mode}`);
+            return;
+        }
+
+        // Load necessary data: always playlists, tracks if necessary
+        let allPlaylists; //Always load playlists. Always needed for search, also needed for selector if mode= 'playlist'
+        let allTracks;  //Only needed for selector if mode= 'track'
+
         try {
             allPlaylists = await this.dataManager.getAllRecords("playlists");
+            allTracks = await this.dataManager.getAllRecords("tracks"); //Only need for track selector
+            // if (mode === 'track') allTracks = await this.dataManager.getAllRecords("tracks");
         } catch (err) {
-            console.error("Failed to load playlists for overlap scan:", err);
+            console.error("Failed to load data for overlap scan:", err);
             return;
         }
 
+
+        // Check that there are playlists to compare, warning + advising user if if not.
         if (!allPlaylists || allPlaylists.length === 0) {
-            await notifyModal({ title: "No Playlists", message: "Import some playlists first." });
+            await notifyModal({ title: "No Playlists", message: "Import some first." });
+            return;
+        } else if (mode === 'track' && (!allTracks || allTracks.length === 0)) {
+            await notifyModal({ title: "No Tracks", message: "Import some first." });
             return;
         }
 
-        // Let user pick which playlist(s) to use as the reference
-        const referenceIds = await playlistSelectModal({
-            title:        "Select Reference Playlists",
-            confirmLabel: "Scan",
-            playlists: allPlaylists,
-            offerSelectAll: false
-        });
-        if (!referenceIds || referenceIds.length === 0) return;
+        //Define both selector modals, selecting which to use based on mode. Both return an array of selected IDB ids, or null if cancelled.
+        const modalConfig = {
+            track:    () => trackSelectModal({    title: "Select Reference Tracks",    tracks:    allTracks,    confirmLabel: "Scan", offerSelectAll: false }),
+            playlist: () => playlistSelectModal({ title: "Select Reference Playlists", playlists: allPlaylists, confirmLabel: "Scan", offerSelectAll: false }),
+        }
 
-        // Build reference track set from all selected playlists
-        const referenceSet = this.buildReferenceSet('playlist', referenceIds, allPlaylists);
+        // Get reference IDs from the appropriate selector modal based on mode. Both modals return an array of selected IDB ids, or null if cancelled.
+        const referenceIds = await modalConfig[mode]();
+        if (!referenceIds || referenceIds.length === 0) return; //Return early if user cancelled or made no selection
+        
+        // Build reference track set from all selected tracks
+        const referenceSet = this.buildReferenceSet(mode, referenceIds, allPlaylists);
 
         // Run scan against all playlists, filter to those with at least one match
         const rawResults  = scanWithReference(referenceSet, allPlaylists);
@@ -843,57 +860,6 @@ class DashboardApp {
         } 
     }
 
-    async handleSimilarityReferenceTracks() {
-        // Load playlists
-        let allTracks;
-        let allPlaylists;
-
-        try {
-            allTracks = await this.dataManager.getAllRecords("tracks");
-            allPlaylists = await this.dataManager.getAllRecords("playlists");
-        } catch (err) {
-            console.error("Failed to load data for overlap scan:", err);
-            return;
-        }
-
-        // Check that there are tracks and playlists to compare, warning + advising user if if not.
-        if (!allTracks || allTracks.length === 0) {
-            await notifyModal({ title: "No Tracks", message: "Import some first." });
-            return;
-        } else if (!allPlaylists || allPlaylists.length === 0) {
-            await notifyModal({ title: "No Playlists", message: "Import some first." });
-            return;
-        }
-
-        // Let user pick which track(s) to use as the reference
-        const referenceIds = await trackSelectModal({
-            title:        "Select Reference Tracks",
-            confirmLabel: "Scan",
-            tracks: allTracks,
-            offerSelectAll: false
-        });
-        if (!referenceIds || referenceIds.length === 0) return;
-        
-        // Build reference track set from all selected tracks
-        const referenceSet = this.buildReferenceSet('track', referenceIds, allPlaylists);
-
-        // Run scan against all playlists, filter to those with at least one match
-        const rawResults  = scanWithReference(referenceSet, allPlaylists);
-        const results     = Object.values(rawResults)
-            .filter(r => r.totalMatch > 0)
-            .sort((a, b) => b.totalMatch - a.totalMatch || b.percentRef - a.percentRef);
-
-        // Label for the modal title — comma-joined names of selected reference playlists
-        const referenceLabel = referenceIds
-            .map(id => allPlaylists.find(p => p.id === id)?.name ?? "?")
-            .join(", ");
-
-        // Show results; returns array of IDs to open if user clicks "Open in Workspace", else null
-        const openIds = await overlapResultsModal({ results, referenceLabel });
-        if (openIds && openIds.length > 0) {
-            this.openWorkspaceWithPlaylists(openIds);
-        }
-    }
     
 }
 
