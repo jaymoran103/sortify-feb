@@ -14,8 +14,9 @@ export function scanWithReference(referenceCollection, targetCollections) {
     for (const playlist of targetCollections) {
         const stats = scanPlaylist(referenceSet, playlist.trackIDs);
         // Attach identity fields so callers don't need to re-join on id
-        stats.id   = playlist.id;
-        stats.name = playlist.name;
+        stats.id         = playlist.id;
+        stats.name       = playlist.name;
+        stats.trackCount = playlist.trackIDs?.length ?? playlist.trackCount ?? 0; 
         results[playlist.id] = stats;
     }
 

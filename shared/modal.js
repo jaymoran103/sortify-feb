@@ -320,6 +320,21 @@ function _openSelectModal({ title,
     // Rows are rebuilt in the new order; existing DOM nodes are replaced.
     // FUTURE: make sort options dynamic
     function applySortAndRender(criteria, list) {
+        function parseCount(value) {
+            if (typeof value === "number") return value;
+            if (typeof value === "string") {
+                const m = value.match(/[-+]?[0-9]*\.?[0-9]+/);
+                return m ? Number(m[0]) : 0;
+            }
+            return 0;
+        }
+
+        function getTrackCount(item) {
+            if (item.trackCount != null) return Number(item.trackCount);
+            if (Array.isArray(item.trackIDs)) return item.trackIDs.length;
+            return parseCount(getCount(item));
+        }
+
         const sorted = [...items].sort((a, b) => {
             switch (criteria) {
                 case "name":
@@ -331,7 +346,7 @@ function _openSelectModal({ title,
                     if (!b.lastModified) return -1;
                     return new Date(b.lastModified) - new Date(a.lastModified);
                 case "track-count":
-                    return (getCount(b) ?? 0) - (getCount(a) ?? 0);
+                    return getTrackCount(b) - getTrackCount(a);
                 case "artist":
                     return (a.artist || "").localeCompare(b.artist || "");
                 case "album":
@@ -585,6 +600,8 @@ export function overlapResultsModal({ results = [], referenceLabel = "reference"
             { value: "percentTarget", label: "% Overlap" },
             { value: "percentRef",    label: "% of Reference" },
             { value: "name",          label: "Name" },
+            { value: "track-count",    label: "Track Count" },
+
         ],
         sortSelected:   false,
         offerSelectAll: true,
