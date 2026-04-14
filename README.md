@@ -1,8 +1,13 @@
 # Sortify
 
-Sortify is a browser-based playlist manager for Spotify. Import playlists from Spotify or local files, manage and reorganize tracks across multiple playlists in a unified workspace, and export back to Spotify or as local files whenever you like.
+Sortify is a browser-based playlist management platform built in vanilla JS. using IndexedDB for local storage and the Spotify Web API as a data source. 
+
+Sortify is a browser-based playlist management platform built in vanilla JS. using IndexedDB for local storage and the Spotify Web API as a data source. It allows users to organize their playlists using a multi-playlist editor, scans library data for overlaping content, and provides flexible export, via Spotify or as CSV/JSON files.
+
+Import your playlists from spotify or local files, so from Spotify or local files, reorganize your library with a multi-playlist workspace and overlap,   and reorganize tracks across multiple playlists in a unified workspace, and export back to Spotify or as local files whenever you like.
 
 This implementation is entirely in vanilla JavaScript with no backend — all data persists in the browser via IndexedDB. A Vue 3 / TypeScript rewrite is in progress, with cleaner component architecture, stronger type safety, and more advanced analysis tools.
+
 
 ---
 

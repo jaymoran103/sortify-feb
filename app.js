@@ -719,7 +719,7 @@ class DashboardApp {
         }
 
         if (!playlists || playlists.length === 0) {
-            await notifyModal({ title: "No Playlists", message: "Import some playlists first before opening the workspace." });
+            await notifyModal({ title: "No Playlists", message: "Import some first before opening the workspace." });
             return;
         }
 
