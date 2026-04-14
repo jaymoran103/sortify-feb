@@ -1,6 +1,6 @@
 # Sortify
 
-Sortify is a browser-based playlist management platform built in vanilla JS. using IndexedDB for local storage and the Spotify Web API as a data source. 
+This is the implementation of Sortify in vanilla JavaScript. See the VueJS implementation on [GitHub](https://github.com/jaymoran103/sortify-vue), or use the [published site](https://jaymoran103.github.io/sortify-vue/)!
 
 Sortify is a browser-based playlist management platform built in vanilla JS. using IndexedDB for local storage and the Spotify Web API as a data source. It allows users to organize their playlists using a multi-playlist editor, scans library data for overlaping content, and provides flexible export, via Spotify or as CSV/JSON files.
 

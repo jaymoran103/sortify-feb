@@ -23,44 +23,56 @@
         <!-- Top Card -->
         <div class="help-section">
             <h1>Welcome to Sortify</h1>
-            <p>A browser-based playlist manager. Import, sort, and export your tracks and playlists, syncing with Spotify or using local files.</p>
+            <p>Sortify is browser-based playlist manager, helping you reduce playlist clutter and make the most of your music library.</p>
+            <p>Manage playlist overlap in a multi-playlist workspace, and use analysis tools to find and edit redundant playlists across your library.</p>
+            <p>For the most updated version of the app, check out the <a href="https://jaymoran103.github.io/sortify-vue/">VueJS release</a>.</p>
         </div>
+
+        <!-- spacer -->
+        <div style="height: 20px;"></div>
 
         <!-- Getting Started -->
         <div class="card">
             <h2>Getting Started</h2>
+            
+            <div style="height: 5px;"></div>
+
             <ol class="steps">
                 <li>
                     <span>
                         <strong>Import your playlists</strong>
-                        Click "Import Playlists" on the dashboard. Choose Spotify (You'll be redirected to log in) or Local Files to load a file exported from here or another service.
+                        <p>Click "Import Playlists" on the dashboard. You can load them directly from Spotify, or as local files (exported from here or another service)</p>
                     </span>
                 </li>
                 <li>
                     <span>
                         <strong>Open the Workspace</strong>
-                        Select one or more playlists from the Open Workspace card and click Open. All selected playlists appear as columns in a single table.            
-                        <!-- Optionally, you can start a session based on playlist overlap using the Overlap Analysis widget. -->
+                        <p>Select one or more playlists from the <u>Open Workspace</u> card and click Open. The workspace displays all tracks and playlists selected, with checkboxes to toggle track membership in each playlist. </p>
+                        <!-- <p>Optionally, you can open the workspace via the Overlap Analysis widget, which searches for playlists with high overlap.</p> -->
                     </span>
                 </li>
                 <li>
                     <span>
                         <strong>Make changes and save</strong>
-                        Edits aren't permanent until you click Save. The Save button highlights when there are unsaved changes — save before navigating away.
+                        <p>Edits aren't permanent until you save them, using the 'Save' button or Cmd+S. Your data on Spotify won't be affected, exports appear as new playlists instead of overwriting.</p>
                     </span>
                 </li>
             </ol>
         </div>
 
-        <div class="card">
+        <!-- spacer -->
+        <div style="height: 20px;"></div>
+
+        <div class="help-section">
             <h2>How Sortify Uses Data</h2>
 
-            <p>To review and edit your playlist library, Sortify stores your playlist data locally in your browser. It's completely private, and only leaves your device when you choose to export it.</p>
-            
-            <!-- <p>You can download your playlist data from Spotify, and export them as new playlists once completed.</p> -->
-
+            <p> 
+                Sortify stores your playlist data locally in your browser. 
+                It's completely private, and can't leave your device until you choose to export it. 
+                No song or profile data is stored elsewhere, shared, or fed to robots :)
+            </p>
             <!-- <p>Since your data is saved in your browser, it will usually remain accessible the next time you visit this site. To be safe, you can back up edits by exporting your playlists to local files, either as multiple CSV files, or bundled into a single JSON file. To import them again, just select them using the "Import Playlists" button on the dashboard.</p> -->
-            <p>Big downloads from Spotify can be slow, so a recommended approach is to export your whole library once, then save it locally as a JSON bundle for near-instant access next time you start a session. </p>
+            <p>Big downloads from Spotify can be slow, so a recommended approach is to load your whole library once, then save it locally as a JSON bundle for near-instant access next time you start a session. </p>
             <p>Since data is saved in your browser between sessions, you can usually continue where you left off without needing to re-import, but downloading your data when finished ensures you have a backup.</p>
 
         </div>
