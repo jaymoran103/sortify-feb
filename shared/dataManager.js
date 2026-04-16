@@ -1,24 +1,43 @@
+const DB_NAME = "SortifyDB";
+const DB_VERSION = 4;
+
 class DataManager {
 
     constructor() {
         this.db = null;
     }
 
-    // Initialize IndexedDB
+    // Initialize IndexedDB, creating object stores if necessary.
+    // If the existing database version is newer than the app version, open the existing database without forcing a version downgrade.
     async init() {
+        try {
+            await this.openDatabase(DB_VERSION);
+        } catch (err) {
+            if (err.name === 'VersionError') {
+                console.warn('Existing IndexedDB version is newer than app version; opening the existing database without forcing a version downgrade.');
+                await this.openDatabase();
+            } else {
+                throw err;
+            }
+        }
+    }
+
+    async openDatabase(version) {
         return new Promise((resolve, reject) => {
-            const request = indexedDB.open("SortifyDB", 4);
+            const request = version ? indexedDB.open(DB_NAME, version) : indexedDB.open(DB_NAME);
 
             request.onupgradeneeded = (event) => {
                 console.warn("DB Upgrade fired!");
                 this.db = event.target.result;
-                this.createObjectStore(this.db,"playlists")
-                this.createObjectStore(this.db,"tracks",{keyPath: "trackID"});
+                this.createObjectStore(this.db, "playlists");
+                this.createObjectStore(this.db, "tracks", { keyPath: "trackID" });
             };
+
             request.onsuccess = (event) => {
                 this.db = event.target.result;
                 resolve();
             };
+
             request.onerror = (event) => {
                 reject(event.target.error);
             };
